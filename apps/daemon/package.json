@@ -1,0 +1,9 @@
+{
+  "name": "@opensocket/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@opensocket/protocol": "0.1.0"
+  }
+}
