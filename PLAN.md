@@ -145,7 +145,10 @@ interface Harness {
 
 - **`harness-opencode`** (first target): drive OpenCode's server mode
   (`opencode serve`) and/or its SDK; map its event stream onto OSSP. It has the
-  strongest headless/server story today.
+  strongest headless/server story today — strong enough that it is also the v0
+  bootstrap: `opencode serve` is the M0 session engine, with opensocketd as a
+  thin auth/pairing + translation bridge in front of it. No custom engine until
+  a second harness forces the abstraction.
 - **`harness-pi`** (second): drive pi programmatically via its SDK/extension API, or
   tail its JSONL session files and translate; keep pi's minimal philosophy visible in
   capability flags.
@@ -316,14 +319,18 @@ opensocket/
 ## 6. Roadmap
 
 ### M0 — Spike (weeks 1–2)
-- Daemon skeleton: WS server, fake harness streaming scripted events.
-- Bridge `opencode serve` → OSSP → SSE/WS; render transcript in a plain web page.
+- No fake harness, no custom engine: `opencode serve` **is** the session engine.
+- opensocketd v0 is deliberately thin: device auth/pairing on the front, SSE/WS
+  fan-out in the middle, `opencode serve` → OSSP translation + JSONL persistence
+  on the back. Transcript renders in a plain web page.
 - Serve it over `tailscale serve`; open on a phone on the tailnet.
 - **Exit:** prompt from phone → OpenCode on host → streaming markdown on phone,
-  entirely on your network.
+  entirely on your network — with only a bridge between them.
 
 ### M1 — MVP "watch + drive" (weeks 3–6)
-- Sessions: create/resume/list; JSONL logs; snapshot + resume on reconnect.
+- Sessions: create/resume/list; the daemon's OSSP JSONL wraps opencode's own
+  session storage (harness-agnostic source of truth); snapshot + resume on
+  reconnect.
 - `harness-opencode` complete with conformance fixtures.
 - Pairing (QR + device tokens), tailnet identity check.
 - Expo app: transcript UI, streaming markdown + code rendering, interrupt,
