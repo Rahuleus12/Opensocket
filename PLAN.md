@@ -95,7 +95,8 @@ persists as an event log the app can resume from a snapshot.
 
 ### 4.1 Host daemon — `opensocketd`
 
-- **Runtime:** TypeScript on **Bun**.
+- **Runtime:** TypeScript, targeting **Bun** (M0 runs on Node ≥ 24 native
+  type-stripping until Bun is available — no runtime-specific APIs in protocol).
   *Why:* OpenCode and pi are TypeScript with usable SDKs — one language across the
   daemon, adapters, shared protocol types, and the mobile app; Bun gives fast startup
   and single-binary builds. (Revisit in an ADR if a Go/Rust daemon ever becomes
@@ -149,6 +150,13 @@ interface Harness {
   bootstrap: `opencode serve` is the M0 session engine, with opensocketd as a
   thin auth/pairing + translation bridge in front of it. No custom engine until
   a second harness forces the abstraction.
+- **`harness-orchestra`** (validated reference, ships in M0): drive Orchestra's
+  server — `POST /v1/agents` for sessions, `POST /v1/agents/{id}/stream` for
+  runs. Its AgentEvent stream (thinking / generate_chunk / tool_call_* / done)
+  maps almost 1:1 onto OSSP, and it owns its providers (R4-compliant). Brings
+  multi-agent workflows to the phone later via `/v1/workflows/stream`. Known
+  upstream gap: `AgentEvent.Error` is `json:"-"`, so errors stream without
+  their message — flagged for an upstream fix.
 - **`harness-pi`** (second): drive pi programmatically via its SDK/extension API, or
   tail its JSONL session files and translate; keep pi's minimal philosophy visible in
   capability flags.
@@ -319,12 +327,14 @@ opensocket/
 ## 6. Roadmap
 
 ### M0 — Spike (weeks 1–2)
-- No fake harness, no custom engine: `opencode serve` **is** the session engine.
-- opensocketd v0 is deliberately thin: device auth/pairing on the front, SSE/WS
-  fan-out in the middle, `opencode serve` → OSSP translation + JSONL persistence
-  on the back. Transcript renders in a plain web page.
+- No fake harness, no custom engine: real engines are the session layer —
+  Orchestra's server (adapter validated against a contract test double) and
+  `opencode serve` (adapter WIP, TODO against the installed version).
+- opensocketd v0 is deliberately thin: device auth/pairing on the front, SSE
+  fan-out in the middle, harness → OSSP translation + JSONL persistence on the
+  back. Transcript renders in a plain web page.
 - Serve it over `tailscale serve`; open on a phone on the tailnet.
-- **Exit:** prompt from phone → OpenCode on host → streaming markdown on phone,
+- **Exit:** prompt from phone → agent on host → streaming markdown on phone,
   entirely on your network — with only a bridge between them.
 
 ### M1 — MVP "watch + drive" (weeks 3–6)

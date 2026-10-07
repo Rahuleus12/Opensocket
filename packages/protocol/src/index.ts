@@ -31,6 +31,7 @@ export interface MessageDelta {
 }
 export interface MessageCompleted {
   messageId: string;
+  role?: "user" | "assistant" | "system";
   text: string;
   stopReason?: string;
 }

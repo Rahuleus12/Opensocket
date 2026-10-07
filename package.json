@@ -7,10 +7,10 @@
   ],
   "scripts": {
     "typecheck": "tsc -p apps/daemon",
-    "dev:daemon": "bun run apps/daemon/src/index.ts"
+    "dev:daemon": "node apps/daemon/src/index.ts",
+    "test:smoke": "node apps/daemon/test/smoke.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.2",
     "@types/node": "^26.6.4",
     "typescript": "^7.0.2"
   }

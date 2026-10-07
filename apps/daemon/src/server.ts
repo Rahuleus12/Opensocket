@@ -1,76 +1,212 @@
-import type { Envelope } from "@opensocket/protocol";
-import type { Config } from "./env";
-import { checkAuth } from "./auth";
-import { SessionStore } from "./store";
-import { OpencodeBridge } from "./opencode";
+import http from "node:http";
+import { randomUUID } from "node:crypto";
+import type { AddressInfo } from "node:net";
+import { makeEnvelope, type Envelope } from "@opensocket/protocol";
+import type { Config } from "./env.ts";
+import { checkAuth } from "./auth.ts";
+import { SessionStore } from "./store.ts";
+import type { Emit, Harness, SessionMeta } from "./harness.ts";
+import { OrchestraHarness } from "./orchestra.ts";
+import { OpencodeHarness } from "./opencode.ts";
 
 /**
- * M0 server (PLAN §6 M0): SSE fan-out + a WS endpoint, JSONL persistence, and
- * the opencode bridge. Auth is a shared bearer token until M1 pairing lands.
+ * M0 server (PLAN §6 M0): JSONL persistence, per-session SSE fan-out with
+ * replay, and harness routing (orchestra validated, opencode WIP).
+ * Auth is a shared bearer token until M1 pairing lands.
  */
-export function startServer(cfg: Config) {
-  const store = new SessionStore(cfg.dataDir);
-  const bridge = new OpencodeBridge(cfg.opencodeUrl);
-  const subscribers = new Set<(env: Envelope) => void>();
 
-  const fanout = (env: Envelope) => {
-    void store.append(env);
-    for (const send of subscribers) send(env);
+function json(res: http.ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk: Buffer) => (data += chunk.toString()));
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
+
+export async function startServer(cfg: Config): Promise<http.Server> {
+  const store = new SessionStore(cfg.dataDir);
+  const restored = await store.loadAll();
+
+  // Rebuild session metadata from the logs (survives daemon restarts).
+  const meta = new Map<string, SessionMeta>();
+  for (const { sessionId } of store.list()) {
+    const snap = store.fold(sessionId);
+    if (snap) {
+      meta.set(sessionId, {
+        sessionId,
+        workspace: snap.meta.workspace,
+        harness: snap.meta.harness,
+        model: snap.meta.model,
+      });
+    }
+  }
+
+  const harnesses = new Map<string, Harness>([
+    ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
+    ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
+  ]);
+
+  const subscribers = new Map<string, Set<(env: Envelope) => void>>();
+
+  const emitFor = (sessionId: string): Emit => async (type, payload) => {
+    const env = makeEnvelope(sessionId, type as Envelope["type"], payload);
+    env.seq = store.nextSeq(sessionId);
+    await store.append(env);
+    for (const write of subscribers.get(sessionId) ?? []) write(env);
   };
 
-  const server = Bun.serve({
-    port: cfg.port,
-    async fetch(req) {
-      const url = new URL(req.url);
-
-      if (url.pathname === "/health") {
-        return Response.json({ ok: true, sessions: store.list().length });
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const path = url.pathname;
+    try {
+      if (req.method === "GET" && path === "/health") {
+        json(res, 200, { ok: true, sessions: meta.size });
+        return;
       }
 
       if (!checkAuth(req, cfg)) {
-        return new Response("unauthorized", { status: 401 });
+        json(res, 401, { error: "unauthorized" });
+        return;
       }
 
-      // SSE event stream (RFC 0001 §3 fallback path).
-      if (url.pathname.startsWith("/sse/")) {
-        const sessionId = url.pathname.slice("/sse/".length);
-        let push: ((env: Envelope) => void) | null = null;
-        const stream = new ReadableStream({
-          start(controller) {
-            const enc = new TextEncoder();
-            const write = (env: Envelope) =>
-              controller.enqueue(enc.encode(`id: ${env.seq}\ndata: ${JSON.stringify(env)}\n\n`));
-            for (const env of store.events(sessionId)) write(env);
-            push = write;
-            subscribers.add(write);
-          },
-          cancel() {
-            if (push) subscribers.delete(push);
-          },
+      // POST /api/session - create a session on a harness
+      if (req.method === "POST" && path === "/api/session") {
+        const body = JSON.parse((await readBody(req)) || "{}") as {
+          workspace?: string;
+          harness?: string;
+          model?: string;
+          system?: string;
+        };
+        const harness = body.harness ?? "orchestra";
+        const impl = harnesses.get(harness);
+        if (!impl) {
+          json(res, 400, { error: `unknown harness: ${harness}` });
+          return;
+        }
+        const sessionId = `sess_${randomUUID()}`;
+        const m: SessionMeta = {
+          sessionId,
+          workspace: body.workspace ?? "default",
+          harness,
+          model: body.model,
+          system: body.system,
+        };
+        await impl.createSession(m, emitFor(sessionId));
+        meta.set(sessionId, m);
+        json(res, 200, { sessionId });
+        return;
+      }
+
+      // GET /api/session - list sessions
+      if (req.method === "GET" && path === "/api/session") {
+        const sessions = store.list().map((s) => ({
+          ...s,
+          ...(meta.get(s.sessionId) ?? {}),
+        }));
+        json(res, 200, { sessions });
+        return;
+      }
+
+      let m = path.match(/^\/api\/session\/([\w-]+)\/(prompt|permission|interrupt)$/);
+      if (req.method === "POST" && m) {
+        const sessionId = m[1];
+        const action = m[2];
+        const session = meta.get(sessionId);
+        if (!session) {
+          json(res, 404, { error: "no such session" });
+          return;
+        }
+        const impl = harnesses.get(session.harness);
+        if (!impl) {
+          json(res, 500, { error: "harness missing" });
+          return;
+        }
+        const emit = emitFor(sessionId);
+
+        if (action === "prompt") {
+          const body = JSON.parse((await readBody(req)) || "{}") as { text?: string };
+          const text = body.text ?? "";
+          const userMessageId = `user_${store.nextSeq(sessionId)}`;
+          await emit("message.delta", { messageId: userMessageId, role: "user", text });
+          await emit("message.completed", { messageId: userMessageId, role: "user", text, stopReason: "sent" });
+          // Fire-and-forget: the run streams out via SSE; failures land as error events.
+          impl.sendPrompt(session, text, emit).catch(async (err) => {
+            await emit("error", { code: "harness_error", message: String(err), retryable: true });
+            await emit("status", "error");
+          });
+          json(res, 200, { ok: true });
+          return;
+        }
+
+        if (action === "permission") {
+          const body = JSON.parse((await readBody(req)) || "{}") as {
+            requestId?: string;
+            decision?: string;
+          };
+          impl.respondPermission(session, body.requestId ?? "", body.decision ?? "deny");
+          json(res, 200, { ok: true });
+          return;
+        }
+
+        // interrupt
+        impl.interrupt(session);
+        json(res, 200, { ok: true });
+        return;
+      }
+
+      m = path.match(/^\/api\/session\/([\w-]+)\/snapshot$/);
+      if (req.method === "GET" && m) {
+        const snap = store.fold(m[1]);
+        if (!snap) {
+          json(res, 404, { error: "no such session" });
+          return;
+        }
+        json(res, 200, snap);
+        return;
+      }
+
+      m = path.match(/^\/sse\/([\w-]+)$/);
+      if (req.method === "GET" && m) {
+        const sessionId = m[1];
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
         });
-        return new Response(stream, {
-          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        const write = (env: Envelope) => {
+          res.write(`id: ${env.seq}\ndata: ${JSON.stringify(env)}\n\n`);
+        };
+        for (const env of store.events(sessionId)) write(env); // replay
+        let set = subscribers.get(sessionId);
+        if (!set) {
+          set = new Set();
+          subscribers.set(sessionId, set);
+        }
+        set.add(write);
+        const heartbeat = setInterval(() => res.write(": ping\n\n"), 15000);
+        res.on("close", () => {
+          clearInterval(heartbeat);
+          set?.delete(write);
         });
+        return;
       }
 
-      // Forward a prompt to the opencode engine.
-      if (req.method === "POST" && url.pathname.startsWith("/api/session/")) {
-        const sessionId = url.pathname.split("/")[3] ?? "";
-        const body = (await req.json()) as { text?: string };
-        await bridge.sendPrompt(sessionId, body.text ?? "");
-        return Response.json({ ok: true });
-      }
-
-      // Bridge opencode's SSE feed into OSSP (M0 wiring; WS endpoint lands in M1).
-      if (url.pathname === "/api/bridge/start") {
-        void bridge.consume(url.searchParams.get("session") ?? "default", fanout);
-        return Response.json({ ok: true });
-      }
-
-      return new Response("not found", { status: 404 });
-    },
+      json(res, 404, { error: "not found" });
+    } catch (err) {
+      json(res, 500, { error: String(err) });
+    }
   });
 
-  console.log(`opensocketd v0 on :${server.port} (opencode: ${cfg.opencodeUrl})`);
+  await new Promise<void>((resolve) => server.listen(cfg.port, resolve));
+  const addr = server.address() as AddressInfo;
+  console.log(
+    `opensocketd v0 on :${addr.port} (orchestra: ${cfg.orchestraUrl}, opencode: ${cfg.opencodeUrl}) - ${restored} events restored`,
+  );
   return server;
 }
