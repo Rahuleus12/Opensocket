@@ -5,9 +5,23 @@ $logDir = Join-Path $env:TEMP "opensocket"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $repo = Split-Path $PSScriptRoot -Parent
 
+# Load .env from the repo root if present (gitignored). KEY=VALUE lines.
+$envFile = Join-Path $repo ".env"
+if (Test-Path $envFile) {
+  Get-Content $envFile | ForEach-Object {
+    if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
+      Set-Item -Path ("env:" + $Matches[1]) -Value $Matches[2]
+    }
+  }
+}
+
 # Real Orchestra server (edit if your checkout lives elsewhere).
 $orchestraExe = "C:\Users\Administrator\projects\Orchestra\bin\orchestra.exe"
 $orchestraCfg = "C:\Users\Administrator\projects\Orchestra\configs\orchestra.yaml"
+$env:ORCHESTRA_DEFAULT_PROVIDER = "openrouter"
+# api.openrouter.ai is NXDOMAIN at authoritative DNS right now; the API answers
+# on the apex domain. Override the provider's base_url accordingly.
+$env:ORCHESTRA_PROVIDER_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 Start-Process -FilePath $orchestraExe `
   -ArgumentList "serve", "--config", $orchestraCfg, "--addr", "127.0.0.1:8080" `
@@ -24,6 +38,7 @@ Start-Process -FilePath "node" `
 $env:DAEMON_TOKEN = "devsecret"
 $env:PORT = "8097"
 $env:ORCHESTRA_URL = "http://127.0.0.1:8080"
+$env:OPENSOCKET_MODEL = "openai/gpt-4o"
 Start-Process -FilePath "node" `
   -ArgumentList (Join-Path $repo "apps\daemon\src\index.ts") `
   -WindowStyle Hidden `

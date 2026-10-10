@@ -107,7 +107,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
           sessionId,
           workspace: body.workspace ?? "default",
           harness,
-          model: body.model,
+          model: body.model ?? cfg.defaultModel,
           system: body.system,
         };
         await impl.createSession(m, emitFor(sessionId));

@@ -83,8 +83,13 @@ export class OrchestraHarness implements Harness {
         `orchestra: create agent failed (${res.status})${detail ? ": " + detail : ""}`,
       );
     }
-    const body = (await res.json()) as { id?: string; ID?: string };
-    const agentId = body.id ?? body.ID;
+    // Observed response: {"agent":{...},"agent_id":"agent-..."}
+    const body = (await res.json()) as {
+      agent_id?: string;
+      id?: string;
+      ID?: string;
+    };
+    const agentId = body.agent_id ?? body.id ?? body.ID;
     if (!agentId) throw new Error("orchestra: agent create returned no id");
     this.agentIds.set(meta.sessionId, agentId);
     await emit("session.started", {

@@ -40,6 +40,7 @@
   <span class="grow"></span>
   <select id="sessions"><option value="">loading…</option></select>
   <select id="harnessPick"><option value="orchestra">orchestra</option><option value="opencode">opencode</option></select>
+  <input id="model" placeholder="model (openai/gpt-4o)" size="18">
   <button id="new">New</button>
   <input id="token" type="password" placeholder="daemon token">
 </header>
@@ -151,7 +152,7 @@ async function loadSessions() {
     : '<option value="">no sessions</option>';
 }
 $("new").onclick = async () => {
-  const res = await fetch("/api/session", { method: "POST", headers: hdrs(), body: JSON.stringify({ harness: $("harnessPick").value, workspace: "default" }) });
+  const res = await fetch("/api/session", { method: "POST", headers: hdrs(), body: JSON.stringify({ harness: $("harnessPick").value, workspace: "default", model: $("model").value || undefined }) });
   if (!res.ok) { alert("create failed: " + res.status); return; }
   const data = await res.json();
   await loadSessions(); $("sessions").value = data.sessionId; connect(data.sessionId);
