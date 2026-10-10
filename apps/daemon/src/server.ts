@@ -1,5 +1,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
 import { makeEnvelope, type Envelope } from "@opensocket/protocol";
 import type { Config } from "./env.ts";
@@ -65,6 +67,17 @@ export async function startServer(cfg: Config): Promise<http.Server> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
     try {
+      // Web transcript UI (public; the page itself asks for the daemon token).
+      if (req.method === "GET" && (path === "/" || path === "/ui")) {
+        const html = await readFile(
+          fileURLToPath(new URL("../public/index.html", import.meta.url)),
+          "utf8",
+        );
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(html);
+        return;
+      }
+
       if (req.method === "GET" && path === "/health") {
         json(res, 200, { ok: true, sessions: meta.size });
         return;

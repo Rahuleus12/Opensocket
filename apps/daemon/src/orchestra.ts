@@ -73,7 +73,16 @@ export class OrchestraHarness implements Harness {
         system_prompt: meta.system,
       }),
     });
-    if (!res.ok) throw new Error(`orchestra: create agent failed (${res.status})`);
+    if (!res.ok) {
+      // Orchestra error shape: {"error":{"message":"...","status":N}}
+      const detail = await res
+        .json()
+        .then((b) => (b as { error?: { message?: string } }).error?.message)
+        .catch(() => undefined);
+      throw new Error(
+        `orchestra: create agent failed (${res.status})${detail ? ": " + detail : ""}`,
+      );
+    }
     const body = (await res.json()) as { id?: string; ID?: string };
     const agentId = body.id ?? body.ID;
     if (!agentId) throw new Error("orchestra: agent create returned no id");

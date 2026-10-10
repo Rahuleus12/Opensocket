@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc -p apps/daemon",
     "dev:daemon": "node apps/daemon/src/index.ts",
-    "test:smoke": "node apps/daemon/test/smoke.ts"
+    "test:smoke": "node apps/daemon/test/smoke.ts",
+    "mock:orchestra": "node scripts/mock-orchestra.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

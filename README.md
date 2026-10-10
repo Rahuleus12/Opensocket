@@ -34,6 +34,24 @@ npm run test:smoke   # full pipeline vs an Orchestra contract test double
 npm run typecheck
 ```
 
+## Dev stack (no Tailscale needed)
+
+```sh
+powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1   # start
+powershell -ExecutionPolicy Bypass -File scripts/dev-down.ps1  # stop
+```
+
+| Service | URL | Notes |
+|---|---|---|
+| Web UI (real) | http://localhost:8097 | token: `devsecret`; prompts fail until Orchestra has a provider key — the error is the point |
+| Web UI (keyless demo) | http://localhost:8098 | daemon → mock Orchestra double; full streaming demo |
+| Orchestra (real) | http://localhost:8080 | `orchestra.exe serve` |
+| Orchestra (mock) | http://localhost:8081 | contract test double |
+
+Logs: `%TEMP%\opensocket\`. Set `OPENAI_API_KEY` etc. before `dev-up` and the
+real daemon streams for real. Token entry lives in the UI header (stored in
+localStorage); it is sent as a Bearer header, never a URL parameter.
+
 | Env var          | Default                  | Purpose                        |
 |------------------|--------------------------|--------------------------------|
 | `PORT`           | `8097`                   | Daemon listen port             |

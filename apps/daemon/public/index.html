@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenSocket</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f1115; color: #e8e8ea; height: 100dvh; display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #23262e; }
+  header strong { font-size: 15px; margin-right: 4px; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: #1c2029; border: 1px solid #2a2f3a; color: #9aa3b2; }
+  .pill.run { color: #7dd3fc; border-color: #155e75; }
+  .pill.err { color: #fca5a5; border-color: #7f1d1d; }
+  .grow { flex: 1; }
+  select, input, textarea, button { font: inherit; background: #1c2029; color: inherit; border: 1px solid #2a2f3a; border-radius: 8px; padding: 6px 10px; }
+  button { cursor: pointer; } button:hover { background: #242a35; }
+  #token { width: 130px; }
+  main { flex: 1; overflow-y: auto; padding: 18px 14px; display: flex; flex-direction: column; gap: 10px; max-width: 860px; width: 100%; margin: 0 auto; }
+  .msg { padding: 10px 14px; border-radius: 12px; line-height: 1.55; overflow-wrap: break-word; }
+  .user { background: #1e2a44; align-self: flex-end; max-width: 85%; }
+  .assistant { background: #181b22; border: 1px solid #23262e; align-self: flex-start; max-width: 95%; }
+  .msg .role { font-size: 11px; color: #8b93a3; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  pre { background: #0c0e12; border: 1px solid #23262e; border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 13px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  details.tool { background: #14171d; border: 1px solid #23262e; border-radius: 10px; padding: 6px 12px; align-self: flex-start; max-width: 95%; font-size: 13px; }
+  details.tool summary { cursor: pointer; color: #c7b380; }
+  .banner { background: #2a1414; border: 1px solid #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+  footer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #23262e; }
+  textarea { flex: 1; resize: none; }
+</style>
+</head>
+<body>
+<header>
+  <strong>OpenSocket</strong>
+  <span class="pill" id="status">idle</span>
+  <span class="pill" id="harness">—</span>
+  <span class="pill" id="usage">0 tok</span>
+  <span class="grow"></span>
+  <select id="sessions"><option value="">loading…</option></select>
+  <select id="harnessPick"><option value="orchestra">orchestra</option><option value="opencode">opencode</option></select>
+  <button id="new">New</button>
+  <input id="token" type="password" placeholder="daemon token">
+</header>
+<main id="log"><div class="banner">Pick or create a session.</div></main>
+<footer>
+  <textarea id="input" rows="2" placeholder="Say something… (Ctrl+Enter to send)"></textarea>
+  <button id="send">Send</button>
+  <button id="stop">Stop</button>
+</footer>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const hdrs = () => ({ "content-type": "application/json", authorization: "Bearer " + $("token").value });
+$("token").value = localStorage.getItem("os_token") || "";
+$("token").addEventListener("change", () => localStorage.setItem("os_token", $("token").value));
+
+const msgs = new Map();   // messageId -> {el, text, role}
+const tools = new Map();  // toolId -> summary element
+let current = null, ctrl = null;
+
+function md(text) {
+  let h = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  h = h.replace(/```([\s\S]*?)```/g, (_m, c) => "<pre><code>" + c.trim() + "</code></pre>");
+  h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+  h = h.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  return h.replace(/\n/g, "<br>");
+}
+function addMsg(mid, role) {
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  el.innerHTML = '<div class="role">' + role + "</div><div class='body'></div>";
+  $("log").appendChild(el);
+  const rec = { el: el.querySelector(".body"), text: "", role };
+  msgs.set(mid, rec);
+  return rec;
+}
+function setStatus(s) {
+  const el = $("status");
+  el.textContent = s;
+  el.className = "pill" + (s === "running" || s === "thinking" ? " run" : s === "error" ? " err" : "");
+}
+function handle(env) {
+  const p = env.payload;
+  switch (env.type) {
+    case "session.started":
+      $("harness").textContent = p.harness + (p.model ? " / " + p.model : "");
+      break;
+    case "message.delta": {
+      const rec = msgs.get(p.messageId) || addMsg(p.messageId, p.role || "assistant");
+      rec.text += p.text; rec.el.innerHTML = md(rec.text);
+      break;
+    }
+    case "message.completed": {
+      const rec = msgs.get(p.messageId) || addMsg(p.messageId, p.role || "assistant");
+      if (p.role) { rec.role = p.role; rec.el.parentNode.className = "msg " + p.role;
+        rec.el.parentNode.querySelector(".role").textContent = p.role; }
+      rec.text = p.text; rec.el.innerHTML = md(p.text);
+      break;
+    }
+    case "tool.call": {
+      const d = document.createElement("details");
+      d.className = "tool";
+      d.innerHTML = "<summary>tool " + p.name + " … running</summary><pre></pre>";
+      d.querySelector("pre").textContent = p.argsSummary;
+      $("log").appendChild(d);
+      tools.set(p.toolId, d);
+      break;
+    }
+    case "tool.result": {
+      const d = tools.get(p.toolId);
+      if (d) d.querySelector("summary").textContent = "tool " + d.querySelector("summary").textContent.split(" ")[1] + (p.isError ? " ✗" : " ✓") + " — " + (p.summary || "").slice(0, 60);
+      break;
+    }
+    case "status": setStatus(p); break;
+    case "usage": $("usage").textContent = p.tokensIn + " in / " + p.tokensOut + " out tok"; break;
+    case "error": {
+      const b = document.createElement("div");
+      b.className = "banner"; b.textContent = p.message;
+      $("log").appendChild(b);
+      break;
+    }
+  }
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+async function connect(id) {
+  ctrl?.abort(); ctrl = new AbortController();
+  current = id; $("log").innerHTML = ""; msgs.clear(); tools.clear();
+  const res = await fetch("/sse/" + id, { headers: { authorization: "Bearer " + $("token").value }, signal: ctrl.signal });
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of frame.split("\n"))
+        if (line.startsWith("data:")) { try { handle(JSON.parse(line.slice(5))); } catch {} }
+    }
+  }
+}
+async function loadSessions() {
+  const res = await fetch("/api/session", { headers: hdrs() });
+  if (!res.ok) { $("sessions").innerHTML = '<option value="">auth failed</option>'; return; }
+  const data = await res.json();
+  $("sessions").innerHTML = data.sessions.length
+    ? data.sessions.map((s) => '<option value="' + s.sessionId + '">' + s.sessionId.slice(0, 13) + "… " + (s.harness || "") + "</option>").join("")
+    : '<option value="">no sessions</option>';
+}
+$("new").onclick = async () => {
+  const res = await fetch("/api/session", { method: "POST", headers: hdrs(), body: JSON.stringify({ harness: $("harnessPick").value, workspace: "default" }) });
+  if (!res.ok) { alert("create failed: " + res.status); return; }
+  const data = await res.json();
+  await loadSessions(); $("sessions").value = data.sessionId; connect(data.sessionId);
+};
+$("send").onclick = send;
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ctrlKey) send(); });
+async function send() {
+  if (!current) { alert("no session"); return; }
+  const text = $("input").value.trim(); if (!text) return;
+  $("input").value = "";
+  await fetch("/api/session/" + current + "/prompt", { method: "POST", headers: hdrs(), body: JSON.stringify({ text }) });
+}
+$("stop").onclick = () => { if (current) fetch("/api/session/" + current + "/interrupt", { method: "POST", headers: hdrs() }); };
+$("sessions").onchange = () => { if ($("sessions").value) connect($("sessions").value); };
+loadSessions();
+</script>
+</body>
+</html>
