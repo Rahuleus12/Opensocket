@@ -157,9 +157,16 @@ interface Harness {
   multi-agent workflows to the phone later via `/v1/workflows/stream`. Known
   upstream gap: `AgentEvent.Error` is `json:"-"`, so errors stream without
   their message — flagged for an upstream fix.
-- **`harness-pi`** (second): drive pi programmatically via its SDK/extension API, or
-  tail its JSONL session files and translate; keep pi's minimal philosophy visible in
-  capability flags.
+- **`harness-pi`** (implemented in M0): drive the **pi coding agent**
+  (`@earendil-works/pi-coding-agent`, the `pi` CLI) via `pi --mode rpc` —
+  long-lived child process per session, strict JSONL on stdin/stdout, contract
+  from the installed package's docs (rpc.md, json.md v1.2.0). Its event stream
+  (text deltas, tool execution start/end, usage with cost, agent_settled) maps
+  1:1 onto OSSP. M0 runs it stateless (`--no-session`); pi-side resumable
+  sessions are M1+ work. Note: `ohmypi` does not exist on npm; **oh-my-pi**
+  (v0.2.0, single-day release) is an orchestration layer over pi — evaluated
+  and deferred: it duplicates orchestration OpenSocket owns at the daemon level
+  and would couple the harness to an early project.
 - **`harness-builtin`** (third): a deliberately small direct-to-provider agent for
   quick chat and non-code tasks. Providers: **DeepSeek**, any OpenAI-compatible
   endpoint, Anthropic, **Ollama**. Tools: guarded file read/patch, shell run with

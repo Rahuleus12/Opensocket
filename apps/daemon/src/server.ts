@@ -10,6 +10,7 @@ import { SessionStore } from "./store.ts";
 import type { Emit, Harness, SessionMeta } from "./harness.ts";
 import { OrchestraHarness } from "./orchestra.ts";
 import { OpencodeHarness } from "./opencode.ts";
+import { PiHarness } from "./pi.ts";
 
 /**
  * M0 server (PLAN §6 M0): JSONL persistence, per-session SSE fan-out with
@@ -52,6 +53,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   const harnesses = new Map<string, Harness>([
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
     ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
+    ["pi", new PiHarness(cfg.piBin, cfg.dataDir)],
   ]);
 
   const subscribers = new Map<string, Set<(env: Envelope) => void>>();

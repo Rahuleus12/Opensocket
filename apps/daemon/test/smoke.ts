@@ -96,6 +96,7 @@ const cfg: Config = {
   daemonToken: "t",
   opencodeUrl: "http://127.0.0.1:1", // nothing there; opencode adapter is WIP
   orchestraUrl: `http://127.0.0.1:${orchPort}`,
+  piBin: "pi",
   dataDir,
 };
 

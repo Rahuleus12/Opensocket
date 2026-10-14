@@ -5,7 +5,8 @@ harnesses (OpenCode, pi, DeepSeek/Ollama via the builtin), driven from a
 pleasant mobile companion app over Tailscale. See [PLAN.md](PLAN.md).
 
 **Status:** M0. Harnesses are the session engines — **Orchestra** (validated,
-contract-tested) and **opencode** (adapter WIP); `opensocketd` is the auth +
+contract-tested), **pi** (`pi --mode rpc`, protocol-tested live), and
+**opencode** (adapter WIP); `opensocketd` is the auth +
 translation bridge with JSONL persistence. Runs on Node ≥ 24 (native TS
 stripping) — Bun-compatible, no runtime-specific APIs.
 
@@ -14,7 +15,7 @@ stripping) — Bun-compatible, no runtime-specific APIs.
 - `docs/rfc/0001-ossp.md` — OSSP wire/persistence protocol (draft)
 - `packages/protocol/` — OSSP TypeScript types
 - `apps/daemon/` — `opensocketd` v0: SSE fan-out, JSONL store, harness adapters
-  (`src/orchestra.ts` validated, `src/opencode.ts` TODO), smoke test in `test/`
+  (`src/orchestra.ts`, `src/pi.ts`, `src/opencode.ts` WIP), tests in `test/`
 - `PLAN.md` — architecture, roadmap, decisions
 
 ## Run (M0)
@@ -31,6 +32,7 @@ curl localhost:8097/health
 
 ```sh
 npm run test:smoke   # full pipeline vs an Orchestra contract test double
+npm run test:pi      # live pi RPC protocol check (needs `pi` on PATH)
 npm run typecheck
 ```
 

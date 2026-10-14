@@ -6,6 +6,8 @@ export interface Config {
   orchestraUrl: string;
   /** Base URL of `opencode serve` - adapter is WIP (TODO(M0)). */
   opencodeUrl: string;
+  /** pi binary (global npm install of @earendil-works/pi-coding-agent). */
+  piBin: string;
   /** Fallback model for new sessions when the client sends none. */
   defaultModel?: string;
   /** Root for JSONL session storage. */
@@ -20,6 +22,7 @@ export function loadConfig(
     daemonToken: env.DAEMON_TOKEN ?? "",
     orchestraUrl: env.ORCHESTRA_URL ?? "http://127.0.0.1:8080",
     opencodeUrl: env.OPENCODE_URL ?? "http://127.0.0.1:4096",
+    piBin: env.PI_BIN ?? "pi",
     defaultModel: env.OPENSOCKET_MODEL,
     dataDir: env.OPENSOCKET_DATA ?? "~/.opensocket",
   };

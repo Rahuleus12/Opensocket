@@ -9,6 +9,7 @@
     "typecheck": "tsc -p apps/daemon",
     "dev:daemon": "node apps/daemon/src/index.ts",
     "test:smoke": "node apps/daemon/test/smoke.ts",
+    "test:pi": "node apps/daemon/test/pi-protocol.ts",
     "mock:orchestra": "node scripts/mock-orchestra.ts"
   },
   "devDependencies": {
