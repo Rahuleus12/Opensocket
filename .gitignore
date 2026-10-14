@@ -5,3 +5,5 @@ dist/
 .DS_Store
 Thumbs.db
 workspaces/
+demo/pi-agent/auth.json
+demo/pi-agent/models-store.json
