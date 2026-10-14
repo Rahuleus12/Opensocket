@@ -35,6 +35,12 @@ Start-Process -FilePath "node" `
   -RedirectStandardOutput (Join-Path $logDir "mock-orchestra.log") `
   -RedirectStandardError (Join-Path $logDir "mock-orchestra.err")
 
+Start-Process -FilePath "node" `
+  -ArgumentList (Join-Path $repo "scripts\mock-openai.ts") `
+  -WindowStyle Hidden `
+  -RedirectStandardOutput (Join-Path $logDir "mock-openai.log") `
+  -RedirectStandardError (Join-Path $logDir "mock-openai.err")
+
 $env:DAEMON_TOKEN = "devsecret"
 $env:PORT = "8097"
 $env:ORCHESTRA_URL = "http://127.0.0.1:8080"
@@ -47,11 +53,15 @@ Start-Process -FilePath "node" `
 
 $env:PORT = "8098"
 $env:ORCHESTRA_URL = "http://127.0.0.1:8081"
+# Keyless demo: pi talks to the local OpenAI-compatible mock via this config dir.
+$env:PI_CODING_AGENT_DIR = Join-Path $repo "demo\pi-agent"
+$env:PI_OFFLINE = "1"
+$env:OPENSOCKET_MODEL = "mock/mock-gpt"
 Start-Process -FilePath "node" `
   -ArgumentList (Join-Path $repo "apps\daemon\src\index.ts") `
   -WindowStyle Hidden `
   -RedirectStandardOutput (Join-Path $logDir "daemon-mock.log") `
   -RedirectStandardError (Join-Path $logDir "daemon-mock.err")
 
-Write-Host "orchestra(real) :8080 | orchestra(mock) :8081 | daemon(real) :8097 | daemon(mock/demo) :8098"
+Write-Host "orchestra(real) :8080 | orchestra(mock) :8081 | mock-openai :8082 | daemon(real) :8097 | daemon(keyless demo) :8098"
 Write-Host "logs: $logDir"

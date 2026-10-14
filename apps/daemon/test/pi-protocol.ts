@@ -9,6 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiHarness } from "../src/pi.ts";
 
+// pi refreshes model catalogs at startup unless told not to; on this box that
+// means slow DNS. The protocol check needs no catalogs.
+process.env.PI_OFFLINE = "1";
+
 const harness = new PiHarness(process.env.PI_BIN ?? "pi", await mkdtemp(join(tmpdir(), "os-pi-")));
 
 // 1. createSession spawns the child and emits session.started
@@ -36,4 +40,5 @@ console.log("ok  prompt command ->", disposition);
 harness.interrupt(meta);
 console.log("ok  interrupt");
 
+harness.dispose();
 console.log("PI_PROTOCOL_OK");

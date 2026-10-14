@@ -1,0 +1,21 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "mock": {
+      "baseUrl": "http://127.0.0.1:8082/v1",
+      "api": "openai-completions",
+      "apiKey": "mock-not-needed",
+      "models": [
+        {
+          "id": "mock-gpt",
+          "name": "Mock GPT (keyless demo)",
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 128000,
+          "maxTokens": 8192,
+          "reasoning": false
+        }
+      ]
+    }
+  }
+}

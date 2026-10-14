@@ -45,14 +45,18 @@ powershell -ExecutionPolicy Bypass -File scripts/dev-down.ps1  # stop
 
 | Service | URL | Notes |
 |---|---|---|
-| Web UI (real) | http://localhost:8097 | token: `devsecret`; prompts fail until Orchestra has a provider key — the error is the point |
-| Web UI (keyless demo) | http://localhost:8098 | daemon → mock Orchestra double; full streaming demo |
+| Web UI (real) | http://localhost:8097 | token: `devsecret`; Orchestra path needs a provider key |
+| **Web UI (keyless demo)** | **http://localhost:8098** | **pi sessions stream from the local OpenAI mock — no keys, works offline** |
 | Orchestra (real) | http://localhost:8080 | `orchestra.exe serve` |
 | Orchestra (mock) | http://localhost:8081 | contract test double |
+| OpenAI mock | http://localhost:8082 | feeds pi on the demo daemon (`demo/pi-agent/models.json`) |
 
 Logs: `%TEMP%\opensocket\`. Set `OPENAI_API_KEY` etc. before `dev-up` and the
 real daemon streams for real. Token entry lives in the UI header (stored in
 localStorage); it is sent as a Bearer header, never a URL parameter.
+
+`PI_TOOLS=read,ls,grep,find` (set before `dev-up`) restricts the pi harness
+to read-only tools at spawn time; default is all tools.
 
 | Env var          | Default                  | Purpose                        |
 |------------------|--------------------------|--------------------------------|

@@ -210,7 +210,20 @@ class PiProc {
     if (this.stopped) return Promise.reject(new Error("pi process has exited"));
     const id = `cmd_${randomId()}`;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`pi ${String(payload.type)} timed out after 60s (child stuck in startup?)`));
+      }, 60_000);
+      this.pending.set(id, {
+        resolve: (data) => {
+          clearTimeout(timer);
+          resolve(data);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
       this.child.stdin.write(JSON.stringify({ id, ...payload }) + "\n");
     });
   }
@@ -241,6 +254,10 @@ export class PiHarness implements Harness {
 
     const args = ["--mode", "rpc", "--no-session"];
     if (meta.model) args.push("--model", meta.model);
+    // R3 tool policy: PI_TOOLS restricts pi's toolset at spawn time
+    // (comma-separated allowlist, e.g. "read,ls,grep,find"). Default: all.
+    const tools = process.env.PI_TOOLS;
+    if (tools) args.push("--tools", tools);
 
     const proc = new PiProc(this.bin, args, cwd, emit);
     this.procs.set(meta.sessionId, proc);
@@ -267,5 +284,11 @@ export class PiHarness implements Harness {
   respondPermission(): void {
     // RPC-mode pi executes tools directly; approvals come via the R3
     // daemon-side policy (per-workspace tool allowlists) in M2.
+  }
+
+  /** Stop all child processes (daemon shutdown, tests). */
+  dispose(): void {
+    for (const proc of this.procs.values()) proc.kill();
+    this.procs.clear();
   }
 }
