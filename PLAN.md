@@ -171,10 +171,12 @@ interface Harness {
   **oh-my-pi** (v0.2.0, single-day release) is an orchestration layer over pi —
   evaluated and deferred: it duplicates orchestration OpenSocket owns at the
   daemon level and would couple the harness to an early project.
-- **`harness-builtin`** (third): a deliberately small direct-to-provider agent for
-  quick chat and non-code tasks. Providers: **DeepSeek**, any OpenAI-compatible
-  endpoint, Anthropic, **Ollama**. Tools: guarded file read/patch, shell run with
-  approval, web fetch. This is the "it works with zero extra installs" path.
+- **`harness-builtin`** (implemented): a deliberately small direct-to-provider
+  agent with no subprocess — speaks the OpenAI streaming completions API, so
+  it works with **DeepSeek, OpenRouter, OpenAI, Ollama, or the local mock**
+  (`BUILTIN_BASE_URL`/`BUILTIN_API_KEY`/`BUILTIN_MODEL` env). In-memory
+  conversation history; no tools in v1 (nothing to approve). Provider context
+  restarts empty on daemon restart (the transcript persists in the JSONL).
 - **Later candidates:** aider, gemini-cli, claude-code (license permitting).
 
 Each adapter ships a **conformance test suite** (recorded fixtures → OSSP golden

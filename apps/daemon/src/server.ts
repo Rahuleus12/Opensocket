@@ -11,6 +11,7 @@ import type { Emit, Harness, SessionMeta } from "./harness.ts";
 import { OrchestraHarness } from "./orchestra.ts";
 import { OpencodeHarness } from "./opencode.ts";
 import { PiHarness } from "./pi.ts";
+import { BuiltinHarness } from "./builtin.ts";
 
 /**
  * M0 server (PLAN §6 M0): JSONL persistence, per-session SSE fan-out with
@@ -55,6 +56,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
     ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
     ["pi", new PiHarness(cfg.piBin, cfg.dataDir, `http://127.0.0.1:${cfg.port}`, cfg.daemonToken)],
+    ["builtin", new BuiltinHarness(cfg.builtinBaseUrl, cfg.builtinApiKey, cfg.builtinModel)],
   ]);
 
   const subscribers = new Map<string, Set<(env: Envelope) => void>>();

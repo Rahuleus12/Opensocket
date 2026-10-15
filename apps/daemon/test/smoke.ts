@@ -97,6 +97,9 @@ const cfg: Config = {
   opencodeUrl: "http://127.0.0.1:1", // nothing there; opencode adapter is WIP
   orchestraUrl: `http://127.0.0.1:${orchPort}`,
   piBin: "pi",
+  builtinBaseUrl: "http://127.0.0.1:1/v1",
+  builtinApiKey: "mock",
+  builtinModel: "mock-gpt",
   dataDir,
 };
 

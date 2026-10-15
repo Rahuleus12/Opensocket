@@ -4,11 +4,12 @@ Open-source alternative to Claude Cowork: agents on your machine, open
 harnesses (OpenCode, pi, DeepSeek/Ollama via the builtin), driven from a
 pleasant mobile companion app over Tailscale. See [PLAN.md](PLAN.md).
 
-**Status:** M0. Harnesses are the session engines — **Orchestra** (validated,
-contract-tested), **pi** (`pi --mode rpc`, protocol-tested live), and
-**opencode** (adapter WIP); `opensocketd` is the auth +
-translation bridge with JSONL persistence. Runs on Node ≥ 24 (native TS
-stripping) — Bun-compatible, no runtime-specific APIs.
+**Status:** M0/M2. Harnesses are the session engines — **pi** (coding agent,
+RPC, approvals + resumable sessions), **Orchestra** (multi-agent workflows,
+contract-tested), **builtin** (direct-to-provider chat: OpenRouter, DeepSeek,
+Ollama, or the local mock), and **opencode** (adapter WIP); `opensocketd` is
+the auth + translation bridge with JSONL persistence. Runs on Node ≥ 24
+(native TS stripping) — Bun-compatible, no runtime-specific APIs.
 
 ## Layout
 
@@ -31,8 +32,9 @@ curl localhost:8097/health
 ## Test
 
 ```sh
-npm run test:smoke   # full pipeline vs an Orchestra contract test double
-npm run test:pi      # live pi RPC protocol check (needs `pi` on PATH)
+npm run test:smoke    # full pipeline vs an Orchestra contract test double
+npm run test:pi       # live pi RPC protocol check (needs `pi` on PATH)
+npm run test:builtin  # built-in agent vs the OpenAI mock
 npm run typecheck
 ```
 

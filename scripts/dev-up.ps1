@@ -52,6 +52,12 @@ $env:DAEMON_TOKEN = "devsecret"
 $env:PORT = "8097"
 $env:ORCHESTRA_URL = "http://127.0.0.1:8080"
 $env:OPENSOCKET_MODEL = "openai/gpt-4o"
+# Built-in agent: real key goes to OpenRouter (apex domain; see PLAN/README).
+if ($env:OPENROUTER_API_KEY) {
+  $env:BUILTIN_BASE_URL = "https://openrouter.ai/api/v1"
+  $env:BUILTIN_API_KEY = $env:OPENROUTER_API_KEY
+  $env:BUILTIN_MODEL = "openai/gpt-4o"
+}
 Start-Process -FilePath "node" `
   -ArgumentList (Join-Path $repo "apps\daemon\src\index.ts") `
   -WindowStyle Hidden `
@@ -64,6 +70,10 @@ $env:ORCHESTRA_URL = "http://127.0.0.1:8081"
 $env:PI_CODING_AGENT_DIR = Join-Path $repo "demo\pi-agent"
 $env:PI_OFFLINE = "1"
 $env:OPENSOCKET_MODEL = "mock/mock-gpt"
+# Built-in agent: keyless via the local OpenAI mock.
+$env:BUILTIN_BASE_URL = "http://127.0.0.1:8082/v1"
+$env:BUILTIN_API_KEY = "mock-not-needed"
+$env:BUILTIN_MODEL = "mock-gpt"
 Start-Process -FilePath "node" `
   -ArgumentList (Join-Path $repo "apps\daemon\src\index.ts") `
   -WindowStyle Hidden `

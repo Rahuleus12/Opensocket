@@ -10,6 +10,7 @@
     "dev:daemon": "node apps/daemon/src/index.ts",
     "test:smoke": "node apps/daemon/test/smoke.ts",
     "test:pi": "node apps/daemon/test/pi-protocol.ts",
+    "test:builtin": "node apps/daemon/test/builtin.ts",
     "mock:orchestra": "node scripts/mock-orchestra.ts",
     "mock:openai": "node scripts/mock-openai.ts"
   },
