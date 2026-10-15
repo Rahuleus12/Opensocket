@@ -22,9 +22,11 @@ if (Test-Path $envFile) {
   }
 }
 
-# Real Orchestra server (edit if your checkout lives elsewhere).
-$orchestraExe = "C:\Users\Administrator\projects\Orchestra\bin\orchestra.exe"
-$orchestraCfg = "C:\Users\Administrator\projects\Orchestra\configs\orchestra.yaml"
+# Real Orchestra server. Set ORCHESTRA_DIR to your local checkout if it
+# differs from the default, or let it default below.
+$orchestraDir = if ($env:ORCHESTRA_DIR) { $env:ORCHESTRA_DIR } else { "C:\Users\Administrator\projects\Orchestra" }
+$orchestraExe = Join-Path $orchestraDir "bin\orchestra.exe"
+$orchestraCfg = Join-Path $orchestraDir "configs\orchestra.yaml"
 $env:ORCHESTRA_DEFAULT_PROVIDER = "openrouter"
 # api.openrouter.ai is NXDOMAIN at authoritative DNS right now; the API answers
 # on the apex domain. Override the provider's base_url accordingly.
