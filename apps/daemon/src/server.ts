@@ -12,6 +12,7 @@ import { OrchestraHarness } from "./orchestra.ts";
 import { OpencodeHarness } from "./opencode.ts";
 import { PiHarness } from "./pi.ts";
 import { BuiltinHarness } from "./builtin.ts";
+import { ApprovalGate } from "./approvals.ts";
 
 /**
  * M0 server (PLAN §6 M0): JSONL persistence, per-session SSE fan-out with
@@ -52,18 +53,18 @@ export async function startServer(cfg: Config): Promise<http.Server> {
     }
   }
 
+  const subscribers = new Map<string, Set<(env: Envelope) => void>>();
+
+  /** Shared approval gate (R3): pi's HTTP route and builtin's tools both use it. */
+  const gate = new ApprovalGate(cfg.approvalTimeoutMs ?? 120_000);
+
   const harnesses = new Map<string, Harness>([
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
     ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
     ["pi", new PiHarness(cfg.piBin, cfg.dataDir, `http://127.0.0.1:${cfg.port}`, cfg.daemonToken)],
-    ["builtin", new BuiltinHarness(cfg.builtinBaseUrl, cfg.builtinApiKey, cfg.builtinModel)],
+    ["builtin", new BuiltinHarness(cfg.builtinBaseUrl, cfg.builtinApiKey, cfg.builtinModel, cfg.dataDir, gate)],
   ]);
 
-  const subscribers = new Map<string, Set<(env: Envelope) => void>>();
-
-  /** Pending tool approvals: "<sessionId>|<requestId>" -> resolver. */
-  const pendingPermissions = new Map<string, (decision: string) => void>();
-  let permissionSeq = 0;
 
   const emitFor = (sessionId: string): Emit => async (type, payload) => {
     const env = makeEnvelope(sessionId, type as Envelope["type"], payload);
@@ -147,31 +148,16 @@ export async function startServer(cfg: Config): Promise<http.Server> {
           json(res, 404, { error: "no such session" });
           return;
         }
-        const requestId = `perm_${++permissionSeq}`;
         const body = JSON.parse((await readBody(req)) || "{}") as {
           tool?: string;
           argsSummary?: string;
         };
-        const emit = emitFor(sessionId);
-        await emit("permission.request", {
-          requestId,
-          tool: body.tool ?? "unknown",
-          argsSummary: body.argsSummary ?? "",
-          riskHints:
-            body.tool === "bash" || body.tool === "powershell"
-              ? ["executes commands"]
-              : undefined,
-        });
-        const decision = await new Promise<string>((resolve) => {
-          const timer = setTimeout(() => {
-            pendingPermissions.delete(`${sessionId}|${requestId}`);
-            resolve("deny"); // fail-safe: silence means no
-          }, 120_000);
-          pendingPermissions.set(`${sessionId}|${requestId}`, (d) => {
-            clearTimeout(timer);
-            resolve(d);
-          });
-        });
+        const decision = await gate.ask(
+          emitFor(sessionId),
+          sessionId,
+          body.tool ?? "unknown",
+          body.argsSummary ?? "",
+        );
         json(res, 200, { decision });
         return;
       }
@@ -215,11 +201,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
           const requestId = body.requestId ?? "";
           const decision = body.decision ?? "deny";
           impl.respondPermission(session, requestId, decision);
-          const resolver = pendingPermissions.get(`${sessionId}|${requestId}`);
-          if (resolver) {
-            pendingPermissions.delete(`${sessionId}|${requestId}`);
-            resolver(decision);
-          }
+          gate.resolve(sessionId, requestId, decision);
           await emitFor(sessionId)("permission.resolved", { requestId, decision, scope: decision === "allow_session" ? "session" : "once" });
           json(res, 200, { ok: true });
           return;

@@ -8,10 +8,12 @@ export interface Config {
   opencodeUrl: string;
   /** pi binary (global npm install of @earendil-works/pi-coding-agent). */
   piBin: string;
-  /** Built-in agent provider (OpenAI-compatible). Defaults suit the mock. */
+  /** Built-in agent provider (OpenAI-compatible). Defaults to env key. */
   builtinBaseUrl: string;
   builtinApiKey: string;
   builtinModel: string;
+  /** Approval ask timeout (R3); silence auto-denies. */
+  approvalTimeoutMs?: number;
   /** Fallback model for new sessions when the client sends none. */
   defaultModel?: string;
   /** Root for JSONL session storage. */
@@ -27,9 +29,13 @@ export function loadConfig(
     orchestraUrl: env.ORCHESTRA_URL ?? "http://127.0.0.1:8080",
     opencodeUrl: env.OPENCODE_URL ?? "http://127.0.0.1:4096",
     piBin: env.PI_BIN ?? "pi",
-    builtinBaseUrl: env.BUILTIN_BASE_URL ?? "http://127.0.0.1:8082/v1",
-    builtinApiKey: env.BUILTIN_API_KEY ?? "mock-not-needed",
-    builtinModel: env.BUILTIN_MODEL_BUILTIN ?? env.BUILTIN_MODEL ?? "mock-gpt",
+    // Built-in agent: default to the env's OpenRouter key when present (R4:
+    // provider choice stays in the harness), else the local mock.
+    builtinApiKey: env.BUILTIN_API_KEY ?? env.OPENROUTER_API_KEY ?? "mock-not-needed",
+    builtinBaseUrl:
+      env.BUILTIN_BASE_URL ?? (env.OPENROUTER_API_KEY ? "https://openrouter.ai/api/v1" : "http://127.0.0.1:8082/v1"),
+    builtinModel: env.BUILTIN_MODEL ?? (env.OPENROUTER_API_KEY ? "openai/gpt-4o" : "mock-gpt"),
+    approvalTimeoutMs: env.OPENSOCKET_APPROVAL_TIMEOUT_MS ? Number(env.OPENSOCKET_APPROVAL_TIMEOUT_MS) : undefined,
     defaultModel: env.OPENSOCKET_MODEL,
     dataDir: env.OPENSOCKET_DATA ?? "~/.opensocket",
   };

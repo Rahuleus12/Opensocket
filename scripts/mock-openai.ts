@@ -28,13 +28,45 @@ http
       req.on("data", (c: Buffer) => (body += c.toString()));
       req.on("end", () => {
         let stream = false;
+        let messages: { role: string; content: unknown }[] = [];
         try {
-          stream = (JSON.parse(body) as { stream?: boolean }).stream === true;
+          const parsed = JSON.parse(body) as {
+            stream?: boolean;
+            messages?: { role: string; content: unknown }[];
+          };
+          stream = parsed.stream === true;
+          messages = parsed.messages ?? [];
         } catch {
-          // treat as non-stream
+          // treat as non-stream, no messages
         }
         const id = "chatcmpl-mock-" + Date.now().toString(36);
         const created = Math.floor(Date.now() / 1000);
+
+        // Scenario dispatch: continue after a tool result when it is the
+        // latest message; fresh user prompts may issue new tool calls even
+        // when older tool results exist in history.
+        const lastMsg = messages[messages.length - 1];
+        const lastUser = [...messages].reverse().find((m) => m.role === "user");
+        const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
+
+        let toolCall: { name: string; args: string } | null = null;
+        if (lastMsg?.role !== "tool") {
+          if (userText.includes("!run")) {
+            toolCall = { name: "bash", args: '{"command":"echo tool-ran-ok"}' };
+          } else if (userText.includes("!read")) {
+            toolCall = { name: "read", args: '{"path":"notes.txt"}' };
+          }
+        }
+
+        let reply: string;
+        if (lastMsg?.role === "tool") {
+          reply = "TOOL RESULT SEEN: " + String(lastMsg.content).slice(0, 80);
+        } else {
+          reply =
+            process.env.MOCK_OPENAI_REPLY ??
+            "Hello from the mock OpenAI endpoint. Pi drove this through the OpenSocket daemon; no API keys were involved.";
+        }
+
         if (!stream) {
           res.writeHead(200, { "content-type": "application/json" });
           res.end(
@@ -65,11 +97,17 @@ http
         const frames: object[] = [
           { id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: { role: "assistant", content: "" }, logprobs: null, finish_reason: null }] },
         ];
-        const words = reply.split(" ");
-        for (let w = 0; w < words.length; w++) {
-          frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: { content: (w > 0 ? " " : "") + words[w] }, logprobs: null, finish_reason: null }] });
+        if (toolCall) {
+          frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: "call_mock_1", type: "function", function: { name: toolCall.name, arguments: "" } }] }, logprobs: null, finish_reason: null }] });
+          frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: toolCall.args } }] }, logprobs: null, finish_reason: null }] });
+          frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: "tool_calls" }] });
+        } else {
+          const words = reply.split(" ");
+          for (let w = 0; w < words.length; w++) {
+            frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: { content: (w > 0 ? " " : "") + words[w] }, logprobs: null, finish_reason: null }] });
+          }
+          frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: "stop" }] });
         }
-        frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: "stop" }] });
         frames.push({ id, object: "chat.completion.chunk", created, model: "mock-gpt", system_fingerprint: "mock", choices: [], usage: { prompt_tokens: 5, completion_tokens: 20, total_tokens: 25 } });
         let i = 0;
         const timer = setInterval(() => {
