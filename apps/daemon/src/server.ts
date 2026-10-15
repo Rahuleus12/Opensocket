@@ -46,6 +46,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
         workspace: snap.meta.workspace,
         harness: snap.meta.harness,
         model: snap.meta.model,
+        remoteSessionId: snap.meta.remoteSessionId,
       });
     }
   }
@@ -53,10 +54,14 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   const harnesses = new Map<string, Harness>([
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
     ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
-    ["pi", new PiHarness(cfg.piBin, cfg.dataDir)],
+    ["pi", new PiHarness(cfg.piBin, cfg.dataDir, `http://127.0.0.1:${cfg.port}`, cfg.daemonToken)],
   ]);
 
   const subscribers = new Map<string, Set<(env: Envelope) => void>>();
+
+  /** Pending tool approvals: "<sessionId>|<requestId>" -> resolver. */
+  const pendingPermissions = new Map<string, (decision: string) => void>();
+  let permissionSeq = 0;
 
   const emitFor = (sessionId: string): Emit => async (type, payload) => {
     const env = makeEnvelope(sessionId, type as Envelope["type"], payload);
@@ -128,7 +133,48 @@ export async function startServer(cfg: Config): Promise<http.Server> {
         return;
       }
 
-      let m = path.match(/^\/api\/session\/([\w-]+)\/(prompt|permission|interrupt)$/);
+      let m: RegExpMatchArray | null;
+
+      // POST /api/session/:id/permission-request - called by harness-side
+      // approval gates (e.g. the opensocket pi extension). Emits the OSSP
+      // permission.request and long-polls until the client decides.
+      m = path.match(/^\/api\/session\/([\w-]+)\/permission-request$/);
+      if (req.method === "POST" && m) {
+        const sessionId = m[1];
+        if (!meta.has(sessionId)) {
+          json(res, 404, { error: "no such session" });
+          return;
+        }
+        const requestId = `perm_${++permissionSeq}`;
+        const body = JSON.parse((await readBody(req)) || "{}") as {
+          tool?: string;
+          argsSummary?: string;
+        };
+        const emit = emitFor(sessionId);
+        await emit("permission.request", {
+          requestId,
+          tool: body.tool ?? "unknown",
+          argsSummary: body.argsSummary ?? "",
+          riskHints:
+            body.tool === "bash" || body.tool === "powershell"
+              ? ["executes commands"]
+              : undefined,
+        });
+        const decision = await new Promise<string>((resolve) => {
+          const timer = setTimeout(() => {
+            pendingPermissions.delete(`${sessionId}|${requestId}`);
+            resolve("deny"); // fail-safe: silence means no
+          }, 120_000);
+          pendingPermissions.set(`${sessionId}|${requestId}`, (d) => {
+            clearTimeout(timer);
+            resolve(d);
+          });
+        });
+        json(res, 200, { decision });
+        return;
+      }
+
+      m = path.match(/^\/api\/session\/([\w-]+)\/(prompt|permission|interrupt)$/);
       if (req.method === "POST" && m) {
         const sessionId = m[1];
         const action = m[2];
@@ -164,7 +210,15 @@ export async function startServer(cfg: Config): Promise<http.Server> {
             requestId?: string;
             decision?: string;
           };
-          impl.respondPermission(session, body.requestId ?? "", body.decision ?? "deny");
+          const requestId = body.requestId ?? "";
+          const decision = body.decision ?? "deny";
+          impl.respondPermission(session, requestId, decision);
+          const resolver = pendingPermissions.get(`${sessionId}|${requestId}`);
+          if (resolver) {
+            pendingPermissions.delete(`${sessionId}|${requestId}`);
+            resolver(decision);
+          }
+          await emitFor(sessionId)("permission.resolved", { requestId, decision, scope: decision === "allow_session" ? "session" : "once" });
           json(res, 200, { ok: true });
           return;
         }

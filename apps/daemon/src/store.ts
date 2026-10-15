@@ -96,8 +96,19 @@ export class SessionStore {
     for (const env of events) {
       switch (env.type) {
         case "session.started": {
-          const p = env.payload as { workspace: string; harness: string; model?: string };
-          snap.meta = { sessionId, workspace: p.workspace, harness: p.harness, model: p.model };
+          const p = env.payload as {
+            workspace: string;
+            harness: string;
+            model?: string;
+            remoteSessionId?: string;
+          };
+          snap.meta = {
+            sessionId,
+            workspace: p.workspace,
+            harness: p.harness,
+            model: p.model,
+            remoteSessionId: p.remoteSessionId,
+          };
           break;
         }
         case "message.delta": {

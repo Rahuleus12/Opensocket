@@ -5,6 +5,13 @@ $logDir = Join-Path $env:TEMP "opensocket"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $repo = Split-Path $PSScriptRoot -Parent
 
+# Deploy the pi approval gate next to the daemon data dir. PiHarness loads
+# <dataDir>/extensions/opensocket-approval.js into every pi child when present.
+$extDir = Join-Path $env:USERPROFILE ".opensocket\extensions"
+New-Item -ItemType Directory -Force -Path $extDir | Out-Null
+Copy-Item (Join-Path $repo "demo\pi-agent\extensions\opensocket-approval.js") `
+  (Join-Path $extDir "opensocket-approval.js") -Force
+
 # Load .env from the repo root if present (gitignored). KEY=VALUE lines.
 $envFile = Join-Path $repo ".env"
 if (Test-Path $envFile) {

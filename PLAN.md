@@ -162,11 +162,15 @@ interface Harness {
   long-lived child process per session, strict JSONL on stdin/stdout, contract
   from the installed package's docs (rpc.md, json.md v1.2.0). Its event stream
   (text deltas, tool execution start/end, usage with cost, agent_settled) maps
-  1:1 onto OSSP. M0 runs it stateless (`--no-session`); pi-side resumable
-  sessions are M1+ work. Note: `ohmypi` does not exist on npm; **oh-my-pi**
-  (v0.2.0, single-day release) is an orchestration layer over pi — evaluated
-  and deferred: it duplicates orchestration OpenSocket owns at the daemon level
-  and would couple the harness to an early project.
+  1:1 onto OSSP. Sessions are resumable: the daemon passes
+  `--session-id/--session-dir` and records the pi session id in
+  `session.started.remoteSessionId`, so a restarted daemon respawns with full
+  agent context. Approvals (R3): the daemon loads `opensocket-approval.js`
+  into pi, so every `tool_call` asks the daemon → client before executing;
+  `PI_TOOLS` adds a spawn-time allowlist. Note: `ohmypi` does not exist on npm;
+  **oh-my-pi** (v0.2.0, single-day release) is an orchestration layer over pi —
+  evaluated and deferred: it duplicates orchestration OpenSocket owns at the
+  daemon level and would couple the harness to an early project.
 - **`harness-builtin`** (third): a deliberately small direct-to-provider agent for
   quick chat and non-code tasks. Providers: **DeepSeek**, any OpenAI-compatible
   endpoint, Anthropic, **Ollama**. Tools: guarded file read/patch, shell run with

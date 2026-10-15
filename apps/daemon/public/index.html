@@ -116,6 +116,40 @@ function handle(env) {
     }
     case "status": setStatus(p); break;
     case "usage": $("usage").textContent = p.tokensIn + " in / " + p.tokensOut + " out tok"; break;
+    case "permission.request": {
+      const d = document.createElement("details");
+      d.className = "tool";
+      d.style.borderColor = "#7a5b1f";
+      d.id = "perm_" + p.requestId;
+      d.innerHTML = '<summary>approval needed: ' + p.tool + "</summary>" +
+        '<pre></pre>' +
+        '<div style="display:flex;gap:8px;margin-top:6px">' +
+        '<button data-d="allow_once">Allow once</button>' +
+        '<button data-d="allow_session">Always (session)</button>' +
+        '<button data-d="deny">Deny</button></div>';
+      d.querySelector("pre").textContent = p.argsSummary || "(no arguments)";
+      d.querySelectorAll("button").forEach((b) => {
+        b.onclick = () => {
+          fetch("/api/session/" + current + "/permission", {
+            method: "POST", headers: hdrs(),
+            body: JSON.stringify({ requestId: p.requestId, decision: b.dataset.d }),
+          });
+          d.querySelector("summary").textContent = "approval: " + b.dataset.d + " — " + p.tool;
+          d.querySelectorAll("button").forEach((x) => (x.disabled = true));
+        };
+      });
+      $("log").appendChild(d);
+      break;
+    }
+    case "permission.resolved": {
+      const d = document.getElementById("perm_" + p.requestId);
+      if (d) {
+        d.querySelectorAll("button").forEach((x) => (x.disabled = true));
+        const s = d.querySelector("summary");
+        if (s) s.textContent = "approval: " + p.decision + " — " + d.querySelector("summary").textContent.split("— ").pop();
+      }
+      break;
+    }
     case "error": {
       const b = document.createElement("div");
       b.className = "banner"; b.textContent = p.message;

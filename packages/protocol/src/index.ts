@@ -23,6 +23,8 @@ export interface SessionStarted {
   harness: string;
   model?: string;
   resumeOf?: string;
+  /** Harness-side session handle (e.g. pi's own session id) for resume. */
+  remoteSessionId?: string;
 }
 export interface MessageDelta {
   messageId: string;
@@ -190,6 +192,7 @@ export interface Snapshot {
     workspace: string;
     harness: string;
     model?: string;
+    remoteSessionId?: string;
   };
   messages: { messageId: string; role: string; text: string }[];
   tools: { toolId: string; name: string; status: string }[];

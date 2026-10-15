@@ -6,6 +6,8 @@ export interface SessionMeta {
   harness: string;
   model?: string;
   system?: string;
+  /** Harness-side session handle (e.g. pi's own session id) for resume. */
+  remoteSessionId?: string;
 }
 
 /** Emit an OSSP event into the daemon (store + fan-out handled server-side). */

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Emit, Harness, SessionMeta } from "./harness.ts";
@@ -78,11 +79,17 @@ class PiProc {
   private emit: Emit;
   stopped = false;
 
-  constructor(bin: string, args: string[], cwd: string, emit: Emit) {
+  constructor(
+    bin: string,
+    args: string[],
+    cwd: string,
+    emit: Emit,
+    extraEnv: Record<string, string> = {},
+  ) {
     this.emit = emit;
     this.child = spawn(bin, args, {
       cwd,
-      env: process.env,
+      env: { ...process.env, ...extraEnv },
       windowsHide: true,
       // Windows: npm's global shim is pi.cmd; bare-name spawn needs a shell.
       shell: process.platform === "win32",
@@ -239,32 +246,58 @@ function randomId(): string {
 
 export class PiHarness implements Harness {
   private procs = new Map<string, PiProc>();
+  private piIds = new Map<string, string>();
   private bin: string;
   private dataDir: string;
+  /** Loaded into every pi child; gates tools through the daemon (R3). */
+  private extensionPath: string;
+  private daemonUrl: string;
+  private daemonToken: string;
 
-  constructor(bin: string, dataDir: string) {
+  constructor(bin: string, dataDir: string, daemonUrl = "", daemonToken = "") {
     this.bin = bin;
     this.dataDir = dataDir;
+    this.extensionPath = join(dataDir, "extensions", "opensocket-approval.js");
+    this.daemonUrl = daemonUrl;
+    this.daemonToken = daemonToken;
   }
 
   async createSession(meta: SessionMeta, emit: Emit): Promise<void> {
     const workspace = meta.workspace.replace(/[^\w.-]/g, "_") || "default";
     const cwd = join(this.dataDir, "workspaces", workspace);
     await mkdir(cwd, { recursive: true });
+    const sessionDir = join(this.dataDir, "pi-sessions");
+    await mkdir(sessionDir, { recursive: true });
 
-    const args = ["--mode", "rpc", "--no-session"];
+    // Resume the pi-side session when we have its id (daemon restart), else new.
+    const piSessionId = meta.remoteSessionId ?? randomId();
+    const args = [
+      "--mode", "rpc",
+      "--session-id", piSessionId,
+      "--session-dir", sessionDir,
+    ];
     if (meta.model) args.push("--model", meta.model);
+    // R3 approval gate: if the extension is deployed, load it into pi so every
+    // tool_call asks the daemon (which round-trips to the client).
+    const gated = existsSync(this.extensionPath);
+    if (gated) args.push("--extension", this.extensionPath);
     // R3 tool policy: PI_TOOLS restricts pi's toolset at spawn time
     // (comma-separated allowlist, e.g. "read,ls,grep,find"). Default: all.
     const tools = process.env.PI_TOOLS;
     if (tools) args.push("--tools", tools);
 
-    const proc = new PiProc(this.bin, args, cwd, emit);
+    const proc = new PiProc(this.bin, args, cwd, emit, {
+      OPENSOCKET_DAEMON_URL: this.daemonUrl,
+      OPENSOCKET_SESSION_ID: meta.sessionId,
+      OPENSOCKET_TOKEN: this.daemonToken,
+    });
     this.procs.set(meta.sessionId, proc);
+    this.piIds.set(meta.sessionId, piSessionId);
     await emit("session.started", {
       workspace: meta.workspace,
       harness: "pi",
       model: meta.model,
+      remoteSessionId: piSessionId,
     });
   }
 
