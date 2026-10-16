@@ -98,9 +98,10 @@ Logs: `%TEMP%\opensocket\`.
 
 ## Backlog — next work, in priority order
 
-1. **Notifications (M2)**: ntfy/UnifiedPush on permission.request and
-   agent_settled. A small `apps/daemon/src/notify.ts` posting to a
-   user-configured ntfy URL; wire into ApprovalGate.ask and the prompt route.
+1. ~~**Notifications (M2)**~~ — **done**: `apps/daemon/src/notify.ts`
+   (`NTFY_URL`/`NTFY_TOKEN`), hooked on the daemon's emit path so every
+   harness is covered: permission.request (high), error (high), and
+   status-idle (cooldown 15s). Tested in `test:notify`.
 2. **opencode adapter verification (M1 close-out)**: `npm i -g opencode-ai`,
    run `opencode serve`, fill the TODO table in
    `apps/daemon/src/opencode.ts` (routes + event mapping), add a protocol

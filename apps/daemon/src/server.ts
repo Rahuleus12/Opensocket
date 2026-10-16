@@ -13,6 +13,7 @@ import { OpencodeHarness } from "./opencode.ts";
 import { PiHarness } from "./pi.ts";
 import { BuiltinHarness } from "./builtin.ts";
 import { ApprovalGate } from "./approvals.ts";
+import { Notifier } from "./notify.ts";
 
 /**
  * M0 server (PLAN §6 M0): JSONL persistence, per-session SSE fan-out with
@@ -58,6 +59,9 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   /** Shared approval gate (R3): pi's HTTP route and builtin's tools both use it. */
   const gate = new ApprovalGate(cfg.approvalTimeoutMs ?? 120_000);
 
+  /** Push notifications (ntfy). No-op unless NTFY_URL is set. */
+  const notifier = new Notifier(cfg.ntfyUrl ?? "", cfg.ntfyToken ?? "");
+
   const harnesses = new Map<string, Harness>([
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
     ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
@@ -71,6 +75,13 @@ export async function startServer(cfg: Config): Promise<http.Server> {
     env.seq = store.nextSeq(sessionId);
     await store.append(env);
     for (const write of subscribers.get(sessionId) ?? []) write(env);
+    // Push notifications ride the same path as persistence + fan-out, so
+    // every harness is covered (permission/error/idle; see notify.ts).
+    const m = meta.get(sessionId);
+    notifier.onOsspEvent(sessionId, type, payload, {
+      harness: m?.harness,
+      workspace: m?.workspace,
+    });
   };
 
   const server = http.createServer(async (req, res) => {
@@ -259,7 +270,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   await new Promise<void>((resolve) => server.listen(cfg.port, resolve));
   const addr = server.address() as AddressInfo;
   console.log(
-    `opensocketd v0 on :${addr.port} (orchestra: ${cfg.orchestraUrl}, opencode: ${cfg.opencodeUrl}) - ${restored} events restored`,
+    `opensocketd v0 on :${addr.port} (orchestra: ${cfg.orchestraUrl}, opencode: ${cfg.opencodeUrl}) - ${restored} events restored${notifier.configured ? " - notifications: on" : ""}`,
   );
   return server;
 }

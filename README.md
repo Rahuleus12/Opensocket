@@ -60,12 +60,19 @@ localStorage); it is sent as a Bearer header, never a URL parameter.
 `PI_TOOLS=read,ls,grep,find` (set before `dev-up`) restricts the pi harness
 to read-only tools at spawn time; default is all tools.
 
+**Push notifications:** put `NTFY_URL=https://ntfy.sh/<your-topic>` in `.env`
+(and `NTFY_TOKEN` for authenticated self-hosted servers), subscribe the ntfy
+app to that topic, and the daemon pushes **approval requests**, **errors**,
+and **task finished** (15s cooldown) for every harness.
+
 | Env var          | Default                  | Purpose                        |
 |------------------|--------------------------|--------------------------------|
 | `PORT`           | `8097`                   | Daemon listen port             |
 | `DAEMON_TOKEN`   | _(unset = open, dev)_    | Bearer token (M0 stopgap)      |
 | `ORCHESTRA_URL`  | `http://127.0.0.1:8080`  | `orchestra serve` base URL     |
 | `OPENCODE_URL`   | `http://127.0.0.1:4096`  | `opencode serve` base URL      |
+| `NTFY_URL`       | _(unset = off)_          | ntfy topic URL for pushes      |
+| `NTFY_TOKEN`     | _(unset)_                | Bearer token (self-hosted ntfy)|
 | `OPENSOCKET_DATA`| `~/.opensocket`          | JSONL session storage root     |
 
 ## Typecheck
