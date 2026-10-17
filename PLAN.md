@@ -1,9 +1,10 @@
 # OpenSocket — Project Plan
 
 > An open-source alternative to Claude Cowork: your agents run on **your** always-on
-> machine, use **open harnesses** (OpenCode, pi, DeepSeek, Ollama, …), and are driven
-> from a **pleasant mobile companion app** over **Tailscale / VPN**. Nothing leaves
-> your network unless you say so.
+> machine, use **open harnesses** (pi, Orchestra, OpenCode, DeepSeek, Ollama, …), and
+> are driven from a **pleasant mobile companion app** over **your own network** —
+> Tailscale, LAN, SSH tunnel, or a hosted box, whichever you already run. Nothing
+> leaves your network unless you say so.
 
 - **Status:** Draft v0.1 — 2026-10-06
 - **License target:** Apache-2.0 (code), CC-BY-4.0 (docs)
@@ -28,7 +29,7 @@ polished clients — but it is closed:
 | Host       | Anthropic-managed     | Your machine (desktop/homelab/VPS)  |
 | Harness    | Claude agent          | OpenCode, pi, built-in, pluggable   |
 | Models     | Claude only           | DeepSeek, Ollama, any OpenAI-compat |
-| Transport  | Cloud relay           | Your tailnet / WireGuard / LAN      |
+| Transport  | Cloud relay           | Your network: Tailscale, LAN, tunnel, VPS |
 | Client     | Closed apps           | Open companion app + protocol       |
 | Sessions   | Vendor-held           | JSONL event logs you own            |
 
@@ -44,7 +45,9 @@ polished clients — but it is closed:
 2. **Harness adapters** for OpenCode and pi, plus a small **built-in agent** (DeepSeek, Ollama, any OpenAI-compatible endpoint).
 3. **One normalized event protocol** (OSSP) so every harness looks the same to clients.
 4. **Mobile companion app** (iOS/Android) with a reading-first, rendered session UI — *not* a terminal: real typography, markdown, code blocks, diffs, tool cards, approvals.
-5. **Tailscale-first transport** with device pairing; plain-WireGuard and LAN fallbacks; zero public exposure by default.
+5. **Bring-your-own transport** — the daemon is plain HTTP + tokens; reachability
+   (LAN, Tailscale, SSH tunnel, hosted VPS) is user infrastructure. We ship
+   recipes, not VPN code; pairing + per-device tokens make any of them safe.
 6. **Sessions are event logs** (JSONL) — replayable, resumable, greppable, portable.
 7. **Notifications without cloud lock-in** (ntfy / UnifiedPush; APNs/FCM optional bridge).
 
@@ -52,6 +55,8 @@ polished clients — but it is closed:
 
 - Not a general-purpose consumer chat app.
 - Not a hosted/multi-tenant service.
+- No VPN/tunnel integration code — reachability is user infrastructure;
+  we ship connection recipes instead (LAN, Tailscale, SSH, VPS+TLS).
 - No model hosting (bring providers, or run Ollama/vLLM yourself).
 - No terminal emulator UI on mobile.
 - No swarm/multi-agent orchestration yet.
@@ -65,8 +70,8 @@ flowchart TB
     subgraph phone["Companion app - iOS / Android"]
         UI["Rendered session UI: markdown, diffs, approvals"]
     end
-    subgraph net["Your tailnet"]
-        TS["tailscale serve: HTTPS + MagicDNS"]
+    subgraph net["Your network - user infrastructure"]
+        TS["tailnet, LAN, tunnel, or VPS TLS"]
     end
     subgraph host["Your always-on host"]
         D["opensocketd: sessions, auth, replay"]
@@ -84,7 +89,7 @@ flowchart TB
     H3 --> W
 ```
 
-Flow: the phone connects over the tailnet, picks a harness + model, sends a prompt;
+Flow: the phone connects over the user's network, picks a harness + model, sends a prompt;
 the daemon runs the harness inside a workspace; harness events stream back through
 OSSP; the phone renders them as proper text; approvals round-trip inline; the session
 persists as an event log the app can resume from a snapshot.
@@ -106,7 +111,8 @@ persists as an event log the app can resume from a snapshot.
   - Harness process supervision (spawn, health, restart, version pinning)
   - Workspace configuration: allowed roots per session, attachment staging
   - Event fan-out: WebSocket per client + HTTP SSE fallback; snapshot on join
-  - Auth: device tokens, tailnet identity, pairing flow
+  - Auth: pairing + per-device revocable tokens; optional proxy-provided
+    identity headers (e.g. Tailscale WhoIS) when the user fronts the daemon
   - Usage accounting: tokens/cost per session, harness, model
   - Provider neutrality: the daemon never talks to model APIs; providers are a
     harness concern (see 4.2)
@@ -225,29 +231,28 @@ Event-sourced, additive-only, JSON-first. Spec lives in `docs/rfc/0001-ossp.md`.
 
 ---
 
-### 4.4 Transport & network — Tailscale-first
+### 4.4 Transport & network — bring your own
 
-**Primary path (default):**
+**Principle:** the daemon is an ordinary HTTP + WebSocket server with token
+auth. How the phone reaches it is **user infrastructure**, not product. We
+maintain connection recipes and never ship VPN/tunnel code.
 
-1. Host daemon runs on a machine inside your tailnet.
-2. `tailscale serve` fronts it with valid HTTPS + a MagicDNS name, e.g.
-   `https://opensocket.<tailnet>.ts.net` — no certificate babysitting, no ports opened.
-3. Identity is two-factor-ish: **tailnet identity** (WhoIS headers from `serve`) +
-   **device token** issued at pairing. Tokens are revocable from the daemon admin UI.
-4. The phone just needs the Tailscale app joined to the same tailnet. The companion
-   app never needs its own VPN slot — Tailscale *is* the transport.
+**Recipes (docs, one page each):**
 
-**Pairing flow (M1):** daemon prints a QR / 6-word code → phone scans → device token
-minted and bound to the tailnet identity → done. No accounts, no cloud.
+- **LAN** — bind the daemon to the LAN, point the app at `http://<host>:8097`.
+  Token-only auth; loudest warnings.
+- **Tailscale** — install Tailscale on host + phone, `tailscale serve` the
+  daemon, use the MagicDNS URL. WhoIS identity headers, if present, are an
+  optional extra signal — never the only factor.
+- **SSH tunnel** — `ssh -L 8097:localhost:8097 host` for quick remote use,
+  plus plain `tail -f` on session logs with no client at all (see 4.6).
+- **Hosted** — run the daemon on a VPS/box you control behind a TLS reverse
+  proxy; fine for users whose "always-on machine" is rented.
 
-**Fallbacks (documented, supported):**
-
-- Plain **WireGuard** profile export (for people who run raw wg).
-- **LAN-only** mode with mDNS discovery + token auth (no VPN at all).
-- SSH tunnel quick-start for tinkerers, plus plain `tail -f` on session logs (see 4.6).
-
-**Explicit opt-in:** temporary share links via **Tailscale Funnel** (time-boxed,
-per-session, off by default).
+**Pairing flow (M1, the product piece):** daemon prints a QR / 6-word code →
+phone scans → a per-device token is minted (revocable, listed, scoped) →
+done. No accounts, no cloud. A shared devsecret remains the quick-start
+mode, loudly labeled as dev-only.
 
 **Secrets:** model API keys belong to the harness that uses them — OpenCode and pi
 read their own configs/env; `harness-builtin` keeps its provider keys in
@@ -278,7 +283,7 @@ UI spec:
 - **Composer** — multi-line input, attachments (files/images), harness + model chips,
   stop/interrupt, queue-next-prompt-while-running.
 - **Sessions drawer** — list, resume, rename, archive; workspace switcher.
-- **Status bar** — connection state (tailnet), active harness/model, token & cost
+- **Status bar** — connection state, active harness/model, token & cost
   tally.
 - **Theming** — system dark/light, generous whitespace, haptics on approvals; wide
   layout for iPad / desktop web later.
@@ -334,7 +339,7 @@ opensocket/
     mobile/                Expo companion app
     web/                   thin PWA reusing the protocol client (M3)
   examples/
-    tailscale-serve.md     copy-paste serve config
+    connect.md             recipes: LAN, Tailscale, SSH tunnel, VPS + TLS
     opensocketd.service    systemd unit (or use nohup for quick starts)
     docker-compose.yml     host-side packaging
 ```
@@ -350,7 +355,7 @@ opensocket/
 - opensocketd v0 is deliberately thin: device auth/pairing on the front, SSE
   fan-out in the middle, harness → OSSP translation + JSONL persistence on the
   back. Transcript renders in a plain web page.
-- Serve it over `tailscale serve`; open on a phone on the tailnet.
+- Open it from another device on your LAN — or any tunnel you already use.
 - **Exit:** prompt from phone → agent on host → streaming markdown on phone,
   entirely on your network — with only a bridge between them.
 
@@ -359,7 +364,7 @@ opensocket/
   session storage (harness-agnostic source of truth); snapshot + resume on
   reconnect.
 - `harness-opencode` complete with conformance fixtures.
-- Pairing (QR + device tokens), tailnet identity check.
+- Pairing (QR + per-device revocable tokens).
 - Expo app: transcript UI, streaming markdown + code rendering, interrupt,
   session list, status bar.
 - **Exit:** daily-drivable for real code tasks at home.
@@ -384,9 +389,11 @@ opensocket/
 
 ## 7. Security & privacy
 
-- **No public ports by default.** Tailnet-only; Funnel strictly opt-in per session.
-- **Auth = tailnet identity + device token**; revocable; pairing uses a short-lived
-  nonce. LAN mode falls back to token-only with louder warnings.
+- **No public exposure by default.** Whatever transport the user picks, auth
+  is per-device tokens (revocable); pairing uses a short-lived nonce. LAN
+  mode is token-only, with louder warnings.
+- **Auth = device token** (+ optional proxy-provided identity, e.g. Tailscale
+  WhoIS, as a second signal when available).
 - **Approval policy:** default-deny beyond read-only tools; per-session "always
   allow" scopes narrowly (per tool, per workspace).
 - **Workspace sandboxing:** daemon-scoped roots per session; optional
@@ -399,7 +406,7 @@ opensocket/
 
 | Risk | Mitigation |
 |---|---|
-| Mobile VPN slot: only one VPN active per device | Tailscale *is* the transport — the companion needs no VPN of its own; LAN mode as fallback |
+| Reachability is the user's problem | Users bring their own transport (LAN, tailnet, tunnel, VPS); we ship recipes, not VPN code |
 | iOS/Android background limits kill streaming | State lives on the host; ntfy/UnifiedPush for "needs you"; fast snapshot resume |
 | Harness APIs churn quickly | Version-pin adapters; conformance tests; OSSP isolates clients from churn |
 | Approval fatigue → blind tapping | Default-deny, crisp risk labels, narrow "always" scopes |
@@ -409,7 +416,7 @@ opensocket/
 ## 9. Open questions
 
 - Native (Swift/Kotlin) rewrite long-term, or Expo forever? (Protocol layer keeps both viable.)
-- Multi-user households: share one daemon across tailnet users in v1, or single-user first?
+- Multi-user households: share one daemon across users in v1, or single-user first?
 - Voice input (Whisper on the host) — worth it for mobile ergonomics?
 - Checkpoints/undo: normalize across harnesses, or pass through raw per-harness?
 - License: Apache-2.0 vs MIT for the code.
@@ -422,8 +429,8 @@ network, and an open protocol other clients can speak.
 
 **v0.1 is successful when:**
 
-1. A user with a tailnet goes from `git clone` → paired phone → completed real task
-   in under 15 minutes.
+1. A user goes from `git clone` → paired phone → completed real task in under
+   15 minutes, over whatever network they already have.
 2. The phone UI renders a full coding session readably — markdown, diffs, tool calls,
    approvals — with zero terminal screens.
 3. At least two harnesses (OpenCode + pi) and two providers (DeepSeek API + Ollama)

@@ -1,8 +1,10 @@
 # OpenSocket
 
 Open-source alternative to Claude Cowork: agents on your machine, open
-harnesses (OpenCode, pi, DeepSeek/Ollama via the builtin), driven from a
-pleasant mobile companion app over Tailscale. See [PLAN.md](PLAN.md).
+harnesses (pi, Orchestra, OpenCode, DeepSeek/Ollama via the builtin), driven
+from a pleasant companion app over **your own network** — Tailscale, LAN,
+tunnel, or a hosted box; connection recipes included, no VPN code. See
+[PLAN.md](PLAN.md).
 
 **Status:** M0/M2. Harnesses are the session engines — **pi** (coding agent,
 RPC, approvals + resumable sessions), **Orchestra** (multi-agent workflows,

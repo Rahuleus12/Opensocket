@@ -92,8 +92,11 @@ Logs: `%TEMP%\opensocket\`.
 - JSONL event log is the only source of truth (R2); snapshots are derived.
 - oh-my-pi: evaluated, deferred (duplicates daemon-level orchestration).
 - Bun: deferred; code stays runtime-agnostic, Node 24 type-stripping runs it.
-- Tailscale: deferred by user choice; localhost/LAN now, tailnet later
-  (`tailscale serve` + pairing is designed in PLAN §4.4).
+- **Transport is user infrastructure** (user decision): the daemon is
+  transport-agnostic HTTP + tokens; we ship connection recipes (LAN,
+  Tailscale, SSH, VPS), never VPN/tunnel code. The product piece kept from
+  the Tailscale plan is transport-neutral auth: pairing + per-device
+  revocable tokens (replaces the shared devsecret).
 - opencode adapter stays a stub until verified against a real install.
 
 ## Backlog — next work, in priority order
@@ -106,16 +109,17 @@ Logs: `%TEMP%\opensocket\`.
    run `opencode serve`, fill the TODO table in
    `apps/daemon/src/opencode.ts` (routes + event mapping), add a protocol
    test like test:pi.
-3. **M1 auth**: replace `DAEMON_TOKEN` with pairing (QR + per-device tokens
-   bound to tailnet identity) and WebSocket transport alongside SSE
-   (PLAN §4.4, RFC §3).
+3. **M1 auth**: replace `DAEMON_TOKEN` with pairing (QR + per-device revocable
+   tokens, optionally cross-checked against proxy identity headers) and add
+   WebSocket transport alongside SSE (PLAN §4.4, RFC §3).
 4. **builtin: provider-context rebuild** from the JSONL fold on daemon
    restart (messages already exist in the log; repopulate `history`).
 5. **builtin: `fetch` tool** (web_get, gated) and `ls` glob support.
 6. **UI session drawer**: workspaces, rename/archive, per-session cost
    totals; wide layout.
-7. **Tailscale wiring (M1)**: `tailscale serve` doc + pairing flow
-   (PLAN §4.4); the companion app (Expo) starts after pairing exists.
+7. **Connection recipes doc** (`examples/connect.md`): LAN, Tailscale,
+   SSH tunnel, VPS + TLS — documentation only, no code (see the transport
+   decision above). Companion app (Expo) starts after pairing exists.
 8. **Orchestra upstream**: the provider/error patches are pushed to
    `Rahuleus12/Orchestra` (`0dab960`); consider a PR upstream if published.
 9. **Compaction** for long sessions (RFC §9) once real usage shows the need.
