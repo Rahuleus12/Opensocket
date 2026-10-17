@@ -111,6 +111,12 @@ export class SessionStore {
           };
           break;
         }
+        case "session.updated": {
+          const p = env.payload as { name?: string; archived?: boolean };
+          if (p.name !== undefined) snap.meta.name = p.name;
+          if (p.archived !== undefined) snap.meta.archived = p.archived;
+          break;
+        }
         case "message.delta": {
           const p = env.payload as { messageId: string; role: string; text: string };
           const m = open.get(p.messageId) ?? { messageId: p.messageId, role: p.role, text: "" };

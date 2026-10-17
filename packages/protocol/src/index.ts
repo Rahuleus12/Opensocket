@@ -26,6 +26,11 @@ export interface SessionStarted {
   /** Harness-side session handle (e.g. pi's own session id) for resume. */
   remoteSessionId?: string;
 }
+/** R1-additive: user-facing metadata updates (rename, archive). */
+export interface SessionUpdated {
+  name?: string;
+  archived?: boolean;
+}
 export interface MessageDelta {
   messageId: string;
   role: "user" | "assistant" | "system";
@@ -113,6 +118,7 @@ export type EventPayload =
 
 export type EventType =
   | "session.started"
+  | "session.updated"
   | "message.delta"
   | "message.completed"
   | "tool.call"
@@ -193,6 +199,9 @@ export interface Snapshot {
     harness: string;
     model?: string;
     remoteSessionId?: string;
+    /** User-facing metadata (session.updated events). */
+    name?: string;
+    archived?: boolean;
   };
   messages: { messageId: string; role: string; text: string }[];
   tools: { toolId: string; name: string; status: string }[];

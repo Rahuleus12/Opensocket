@@ -40,7 +40,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   const restored = await store.loadAll();
 
   // Rebuild session metadata from the logs (survives daemon restarts).
-  const meta = new Map<string, SessionMeta>();
+  const meta = new Map<string, SessionMeta & { name?: string; archived?: boolean; usage?: { tokensIn: number; tokensOut: number } }>();
   for (const { sessionId } of store.list()) {
     const snap = store.fold(sessionId);
     if (snap) {
@@ -50,6 +50,9 @@ export async function startServer(cfg: Config): Promise<http.Server> {
         harness: snap.meta.harness,
         model: snap.meta.model,
         remoteSessionId: snap.meta.remoteSessionId,
+        name: snap.meta.name,
+        archived: snap.meta.archived,
+        usage: snap.usage,
       });
     }
   }
@@ -116,6 +119,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
           harness?: string;
           model?: string;
           system?: string;
+          name?: string;
         };
         const harness = body.harness ?? "orchestra";
         const impl = harnesses.get(harness);
@@ -133,17 +137,65 @@ export async function startServer(cfg: Config): Promise<http.Server> {
         };
         await impl.createSession(m, emitFor(sessionId));
         meta.set(sessionId, m);
+        if (body.name) {
+          const name = body.name.trim().slice(0, 80);
+          await emitFor(sessionId)("session.updated", { name });
+          (m as SessionMeta & { name?: string }).name = name;
+        }
         json(res, 200, { sessionId });
         return;
       }
 
-      // GET /api/session - list sessions
+      // GET /api/session - list sessions (archived ones only with ?all=1)
       if (req.method === "GET" && path === "/api/session") {
-        const sessions = store.list().map((s) => ({
-          ...s,
-          ...(meta.get(s.sessionId) ?? {}),
-        }));
+        const all = new URL(req.url ?? "/", "http://localhost").searchParams.get("all") === "1";
+        const sessions = store.list()
+          .filter((s) => {
+            const m = meta.get(s.sessionId);
+            return all || !m?.archived;
+          })
+          .map((s) => ({
+            ...s,
+            ...(meta.get(s.sessionId) ?? {}),
+          }));
         json(res, 200, { sessions });
+        return;
+      }
+
+      // POST /api/session/:id/rename {name} / archive {} - metadata updates,
+      // persisted as session.updated events so they survive restarts (R2).
+      const metaMatch = path.match(/^\/api\/session\/([\w-]+)\/(rename|archive)$/);
+      if (req.method === "POST" && metaMatch) {
+        const sessionId = metaMatch[1];
+        const action = metaMatch[2];
+        const session = meta.get(sessionId);
+        if (!session) {
+          json(res, 404, { error: "no such session" });
+          return;
+        }
+        const body = action === "rename"
+          ? (JSON.parse((await readBody(req)) || "{}") as { name?: string })
+          : {};
+        const name = action === "rename" ? (body.name ?? "").trim().slice(0, 80) : undefined;
+        if (action === "rename" && !name) {
+          json(res, 400, { error: "name required" });
+          return;
+        }
+        const archived = action === "archive" ? true : undefined;
+        if (archived) {
+          // Stop live harness children for the session (pi RPC proc, etc.).
+          const impl = harnesses.get(session.harness);
+          impl?.respondPermission(session, "", "deny");
+          impl?.interrupt?.(session);
+        }
+        const emit = emitFor(sessionId);
+        await emit("session.updated", {
+          ...(name !== undefined ? { name } : {}),
+          ...(archived !== undefined ? { archived } : {}),
+        });
+        if (name !== undefined) session.name = name;
+        if (archived !== undefined) session.archived = archived;
+        json(res, 200, { ok: true, name, archived });
         return;
       }
 
