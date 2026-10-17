@@ -1,4 +1,5 @@
 import { exec } from "node:child_process";
+import { lookup } from "node:dns/promises";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve as resolvePath, sep } from "node:path";
 import type { Emit, Harness, RestoreMessage, SessionMeta } from "./harness.ts";
@@ -68,7 +69,22 @@ const TOOLS = [
       description: "List files in a workspace directory",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "Directory path, relative to the workspace" } },
+        properties: {
+          path: { type: "string", description: "Directory path, relative to the workspace" },
+          glob: { type: "string", description: 'Optional glob filter, e.g. "*.ts"' },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch",
+      description: "Fetch a public web page or API (http/https) and return its text content",
+      parameters: {
+        type: "object",
+        properties: { url: { type: "string", description: "Absolute http(s) URL" } },
+        required: ["url"],
       },
     },
   },
@@ -169,8 +185,20 @@ export class BuiltinHarness implements Harness {
       case "ls": {
         const p = this.safeJoin(root, String(args.path ?? "."));
         const entries = await readdir(p, { withFileTypes: true });
-        const names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+        let names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+        const glob = typeof args.glob === "string" ? args.glob : "";
+        if (glob) {
+          const re = globToRegExp(glob);
+          names = names.filter((n) => re.test(n.replace(/\/$/, "")));
+        }
         return (names.join("\n") || "(empty)").slice(0, 4096);
+      }
+      case "fetch": {
+        const url = String(args.url ?? "");
+        await assertFetchable(url); // policy before prompt: forbidden targets never ask
+        const decision = await this.gate.ask(emit, meta.sessionId, "fetch", url.slice(0, 300));
+        if (decision === "deny") throw new Error("denied by user");
+        return await fetchText(url);
       }
       case "write": {
         const summary = `${String(args.path ?? "")} (${String(args.content ?? "").length} bytes)`;
@@ -383,4 +411,108 @@ export class BuiltinHarness implements Harness {
   respondPermission(): void {
     // decisions flow through ApprovalGate.resolve
   }
+}
+
+/** Thrown/blocked before any approval prompt: policy checks precede asks. */
+async function assertFetchable(url: string): Promise<void> {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error(`invalid URL: ${url.slice(0, 120)}`);
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    throw new Error(`blocked scheme: ${u.protocol}`);
+  }
+  if (process.env.BUILTIN_FETCH_ALLOW_LOCAL === "1") return; // dev escape hatch
+  const host = u.hostname.toLowerCase();
+  const hostLike =
+    host === "localhost" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".home.arpa");
+  if (hostLike) throw new Error("blocked: private/loopback address");
+  // IP literals and resolved addresses: refuse private/loopback ranges.
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+    if (isPrivateIp(host)) throw new Error("blocked: private/loopback address");
+    return;
+  }
+  if (host.startsWith("[") && host.endsWith("]")) {
+    if (isPrivateIp(host.slice(1, -1))) throw new Error("blocked: private/loopback address");
+    return;
+  }
+  const addrs = await lookup(host, { all: true }).catch(() => null as { address: string }[] | null);
+  if (!addrs || addrs.length === 0) throw new Error("dns resolve failed");
+  if (addrs.some((a) => isPrivateIp(a.address))) {
+    throw new Error("blocked: private/loopback address");
+  }
+}
+
+function isPrivateIp(ip: string): boolean {
+  if (ip.includes(":")) {
+    return ip === "::1" || /^(fc|fd)/i.test(ip) || /^fe[89ab]/i.test(ip);
+  }
+  const o = ip.split(".").map((n) => parseInt(n, 10));
+  if (o.length !== 4 || o.some((n) => Number.isNaN(n))) return true; // unparsable: deny
+  return (
+    o[0] === 10 ||
+    o[0] === 127 ||
+    (o[0] === 172 && o[1]! >= 16 && o[1]! <= 31) ||
+    (o[0] === 192 && o[1] === 168) ||
+    (o[0] === 169 && o[1] === 254) ||
+    o[0] === 0
+  );
+}
+
+/** GET + extract text. (SSRF guarding happens in assertFetchable, pre-prompt.) */
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(20_000),
+    headers: { "user-agent": "opensocketd-fetch/0.1" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const ct = res.headers.get("content-type") ?? "";
+  if (!/text\/|json|xml/i.test(ct)) throw new Error(`unsupported content-type: ${ct.slice(0, 60)}`);
+  const raw = (await res.text()).slice(0, 200_000);
+  const text = ct.includes("html") ? htmlToText(raw) : raw;
+  return text.slice(0, 16_000) || "(empty)";
+}
+
+/** Dependency-free HTML to readable text: drop script/style, tags to breaks. */
+function htmlToText(html: string): string {
+  let h = html
+    .replace(/<script[\s\S]*?<\/script/gi, "")
+    .replace(/<style[\s\S]*?<\/style/gi, "")
+    .replace(/<(br|p|div|li|tr|h[1-6])\b/gi, "\n<$1");
+  h = h.replace(/<[^>]+>/g, "");
+  h = h
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+  return h.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Glob to RegExp: `**` crosses separators, `*`/`?` do not. */
+function globToRegExp(glob: string): RegExp {
+  let re = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        re += ".*";
+        i++;
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else {
+      re += c.replace(/[\.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${re}$`);
 }

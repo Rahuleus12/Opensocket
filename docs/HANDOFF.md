@@ -118,7 +118,11 @@ Logs: `%TEMP%\opensocket\`.
    (system prompt now persisted in `session.started.system`); pi silently
    respawns its RPC child from `remoteSessionId`. Tested in `test:restore`
    (provider sees full history after restart; unrestored control sees 1).
-5. **builtin: `fetch` tool** (web_get, gated) and `ls` glob support.
+5. ~~**builtin: `fetch` tool**~~ — **done**: gated `fetch(url)` with SSRF
+   guards (scheme allowlist, hostname patterns, DNS-resolved private-IP
+   refusal — policy runs before the approval prompt; deny/timeout blocks).
+   `BUILTIN_FETCH_ALLOW_LOCAL=1` is the dev escape hatch for local URLs.
+   `ls` gained an optional `glob` (stdlib glob→regex). Tested in `test:builtin`.
 6. **UI session drawer**: workspaces, rename/archive, per-session cost
    totals; wide layout.
 7. **Connection recipes doc** (`examples/connect.md`): LAN, Tailscale,

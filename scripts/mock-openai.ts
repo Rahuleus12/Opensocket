@@ -55,6 +55,10 @@ http
             toolCall = { name: "bash", args: '{"command":"echo tool-ran-ok"}' };
           } else if (userText.includes("!read")) {
             toolCall = { name: "read", args: '{"path":"notes.txt"}' };
+          } else if (userText.includes("!fetch")) {
+            toolCall = { name: "fetch", args: JSON.stringify({ url: process.env.MOCK_FETCH_URL ?? "https://example.com/" }) };
+          } else if (userText.includes("!ls")) {
+            toolCall = { name: "ls", args: '{"path":".","glob":"*.txt"}' };
           }
         }
 
