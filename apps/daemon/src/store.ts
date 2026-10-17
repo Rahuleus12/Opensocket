@@ -101,6 +101,7 @@ export class SessionStore {
             harness: string;
             model?: string;
             remoteSessionId?: string;
+            system?: string;
           };
           snap.meta = {
             sessionId,
@@ -108,6 +109,7 @@ export class SessionStore {
             harness: p.harness,
             model: p.model,
             remoteSessionId: p.remoteSessionId,
+            system: p.system,
           };
           break;
         }

@@ -13,9 +13,20 @@ export interface SessionMeta {
 /** Emit an OSSP event into the daemon (store + fan-out handled server-side). */
 export type Emit = (type: string, payload: unknown) => Promise<void>;
 
+export interface RestoreMessage {
+  role: string;
+  text: string;
+}
+
 export interface Harness {
   createSession(meta: SessionMeta, emit: Emit): Promise<void>;
   sendPrompt(meta: SessionMeta, text: string, emit: Emit): Promise<void>;
   interrupt(meta: SessionMeta): void;
   respondPermission(meta: SessionMeta, requestId: string, decision: string): void;
+  /**
+   * Rebuild provider/session state from the event log after a daemon
+   * restart. Implementations must not emit events (the log already has
+   * them). Optional; harnesses without restartable state can omit it.
+   */
+  restoreSession?(meta: SessionMeta, messages: RestoreMessage[]): void | Promise<void>;
 }

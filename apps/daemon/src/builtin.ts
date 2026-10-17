@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve as resolvePath, sep } from "node:path";
-import type { Emit, Harness, SessionMeta } from "./harness.ts";
+import type { Emit, Harness, RestoreMessage, SessionMeta } from "./harness.ts";
 import { consumeSSE } from "./sse.ts";
 import type { ApprovalGate } from "./approvals.ts";
 
@@ -201,7 +201,22 @@ export class BuiltinHarness implements Harness {
       workspace: meta.workspace,
       harness: "builtin",
       model: meta.model ?? this.defaultModel,
+      system: meta.system,
     });
+  }
+
+  restoreSession(meta: SessionMeta, messages: RestoreMessage[]): void {
+    // Rebuild the provider conversation from the event log so prompts after a
+    // daemon restart keep their context (transcript -> history, R2).
+    const msgs: ChatMessage[] = [];
+    if (meta.system) msgs.push({ role: "system", content: meta.system });
+    for (const m of messages) {
+      if ((m.role === "user" || m.role === "assistant") && m.text) {
+        msgs.push({ role: m.role, content: m.text });
+      }
+    }
+    this.history.set(meta.sessionId, msgs);
+    mkdir(this.workspaceRoot(meta), { recursive: true }).catch(() => {});
   }
 
   async sendPrompt(meta: SessionMeta, text: string, emit: Emit): Promise<void> {

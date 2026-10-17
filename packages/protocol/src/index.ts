@@ -25,6 +25,8 @@ export interface SessionStarted {
   resumeOf?: string;
   /** Harness-side session handle (e.g. pi's own session id) for resume. */
   remoteSessionId?: string;
+  /** System prompt, persisted so restarts can rebuild provider context. */
+  system?: string;
 }
 /** R1-additive: user-facing metadata updates (rename, archive). */
 export interface SessionUpdated {
@@ -199,6 +201,7 @@ export interface Snapshot {
     harness: string;
     model?: string;
     remoteSessionId?: string;
+    system?: string;
     /** User-facing metadata (session.updated events). */
     name?: string;
     archived?: boolean;

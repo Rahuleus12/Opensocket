@@ -112,8 +112,12 @@ Logs: `%TEMP%\opensocket\`.
 3. **M1 auth**: replace `DAEMON_TOKEN` with pairing (QR + per-device revocable
    tokens, optionally cross-checked against proxy identity headers) and add
    WebSocket transport alongside SSE (PLAN §4.4, RFC §3).
-4. **builtin: provider-context rebuild** from the JSONL fold on daemon
-   restart (messages already exist in the log; repopulate `history`).
+4. ~~**builtin: provider-context rebuild**~~ — **done**: optional
+   `restoreSession(meta, messages)` on the harness seam; the daemon calls it
+   on startup with the folded messages. builtin rebuilds its conversation
+   (system prompt now persisted in `session.started.system`); pi silently
+   respawns its RPC child from `remoteSessionId`. Tested in `test:restore`
+   (provider sees full history after restart; unrestored control sees 1).
 5. **builtin: `fetch` tool** (web_get, gated) and `ls` glob support.
 6. **UI session drawer**: workspaces, rename/archive, per-session cost
    totals; wide layout.

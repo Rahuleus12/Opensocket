@@ -263,6 +263,29 @@ export class PiHarness implements Harness {
   }
 
   async createSession(meta: SessionMeta, emit: Emit): Promise<void> {
+    const proc = await this.spawnFor(meta, emit);
+    this.procs.set(meta.sessionId, proc);
+    await emit("session.started", {
+      workspace: meta.workspace,
+      harness: "pi",
+      model: meta.model,
+      remoteSessionId: this.piIds.get(meta.sessionId),
+    });
+  }
+
+  /**
+   * Restart path: silently respawn the RPC child from the persisted pi
+   * session id (session.started.remoteSessionId) so the agent keeps its
+   * context. No events are emitted - the log already has them.
+   */
+  restoreSession(meta: SessionMeta): Promise<void> {
+    if (!meta.remoteSessionId) return Promise.resolve();
+    return this.spawnFor(meta, async () => {}).then((proc) => {
+      this.procs.set(meta.sessionId, proc);
+    });
+  }
+
+  private async spawnFor(meta: SessionMeta, emit: Emit): Promise<PiProc> {
     const workspace = meta.workspace.replace(/[^\w.-]/g, "_") || "default";
     const cwd = join(this.dataDir, "workspaces", workspace);
     await mkdir(cwd, { recursive: true });
@@ -270,35 +293,27 @@ export class PiHarness implements Harness {
     await mkdir(sessionDir, { recursive: true });
 
     // Resume the pi-side session when we have its id (daemon restart), else new.
-    const piSessionId = meta.remoteSessionId ?? randomId();
+    const piSessionId = meta.remoteSessionId ?? this.piIds.get(meta.sessionId) ?? randomId();
     const args = [
       "--mode", "rpc",
       "--session-id", piSessionId,
       "--session-dir", sessionDir,
     ];
     if (meta.model) args.push("--model", meta.model);
-    // R3 approval gate: if the extension is deployed, load it into pi so every
-    // tool_call asks the daemon (which round-trips to the client).
-    const gated = existsSync(this.extensionPath);
-    if (gated) args.push("--extension", this.extensionPath);
     // R3 tool policy: PI_TOOLS restricts pi's toolset at spawn time
     // (comma-separated allowlist, e.g. "read,ls,grep,find"). Default: all.
     const tools = process.env.PI_TOOLS;
     if (tools) args.push("--tools", tools);
+    const extPath = this.extensionPath;
+    if (existsSync(extPath)) args.push("--extension", extPath);
 
     const proc = new PiProc(this.bin, args, cwd, emit, {
       OPENSOCKET_DAEMON_URL: this.daemonUrl,
       OPENSOCKET_SESSION_ID: meta.sessionId,
       OPENSOCKET_TOKEN: this.daemonToken,
     });
-    this.procs.set(meta.sessionId, proc);
     this.piIds.set(meta.sessionId, piSessionId);
-    await emit("session.started", {
-      workspace: meta.workspace,
-      harness: "pi",
-      model: meta.model,
-      remoteSessionId: piSessionId,
-    });
+    return proc;
   }
 
   async sendPrompt(meta: SessionMeta, text: string, emit: Emit): Promise<void> {

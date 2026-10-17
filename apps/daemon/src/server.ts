@@ -50,6 +50,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
         harness: snap.meta.harness,
         model: snap.meta.model,
         remoteSessionId: snap.meta.remoteSessionId,
+        system: snap.meta.system,
         name: snap.meta.name,
         archived: snap.meta.archived,
         usage: snap.usage,
@@ -71,6 +72,20 @@ export async function startServer(cfg: Config): Promise<http.Server> {
     ["pi", new PiHarness(cfg.piBin, cfg.dataDir, `http://127.0.0.1:${cfg.port}`, cfg.daemonToken)],
     ["builtin", new BuiltinHarness(cfg.builtinBaseUrl, cfg.builtinApiKey, cfg.builtinModel, cfg.dataDir, gate)],
   ]);
+
+  // Restart path: let harnesses rebuild provider/session state from the logs
+  // (builtin conversation history; pi respawns its RPC child). One failing
+  // session must not block startup.
+  for (const [sessionId, m] of meta) {
+    const impl = harnesses.get(m.harness);
+    if (!impl?.restoreSession) continue;
+    try {
+      const snap = store.fold(sessionId);
+      if (snap) await impl.restoreSession(m, snap.messages);
+    } catch (err) {
+      console.log(`[restore] ${sessionId} failed: ${String(err).slice(0, 120)}`);
+    }
+  }
 
 
   const emitFor = (sessionId: string): Emit => async (type, payload) => {
