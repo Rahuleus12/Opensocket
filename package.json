@@ -14,6 +14,7 @@
     "test:builtin": "node apps/daemon/test/builtin.ts",
     "test:auth": "node apps/daemon/test/auth.ts",
     "test:ws": "node apps/daemon/test/ws.ts",
+    "test:client": "node apps/daemon/test/client.ts",
     "tail": "node apps/daemon/src/tail.ts",
     "test:notify": "node apps/daemon/test/notify.ts",
     "test:restore": "node apps/daemon/test/restore.ts",

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@opensocket/protocol": "0.1.0"
+    "@opensocket/protocol": "0.1.0",
+    "@opensocket/client": "0.1.0"
   }
 }

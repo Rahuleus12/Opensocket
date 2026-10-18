@@ -11,6 +11,7 @@ npm run typecheck      # tsc strict, must pass before any commit
 npm run test:smoke     # full pipeline vs Orchestra contract double (no keys)
 npm run test:pi        # live pi RPC check (needs `pi` on PATH, no model calls)
 npm run test:builtin   # builtin agent vs the OpenAI mock (no keys)
+npm run test:client    # @opensocket/client vs a real daemon + mock (no keys)
 npm run dev:daemon     # run opensocketd (Node >= 24, native TS stripping)
 powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1    # full stack (Windows)
 powershell -ExecutionPolicy Bypass -File scripts/dev-down.ps1  # stop it
@@ -29,6 +30,9 @@ scripts/dev-down.sh    # stop it
 - `apps/daemon/src/approvals.ts` — shared R3 approval gate
 - `apps/daemon/src/sse.ts` — shared SSE line parser
 - `packages/protocol/` — OSSP types (additive-only, R1)
+- `packages/client/` — framework-agnostic OSSP client (pairing/REST, WS
+  hello-auth + snapshot/tail + auto-resume, SSE fallback); used by the
+  Tauri companion app and shareable with the web UI
 - `demo/pi-agent/` — pi config for keyless demos (models.json, approval ext)
 - `scripts/` — dev-up/down (Windows), mock-orchestra, mock-openai
 

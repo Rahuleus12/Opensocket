@@ -1,7 +1,7 @@
 # Handoff — working on OpenSocket from a fresh PC
 
 This file + `AGENTS.md` + `PLAN.md` are all the context needed to continue.
-Last updated: 2026-10-18.
+Last updated: 2026-10-19.
 
 ## State at a glance
 
@@ -44,6 +44,14 @@ Everything below is **implemented and verified live** on the authoring PC:
   `session.log` next to its JSONL (`ssh host -- tail -f …` with no client);
   `npm run tail -- <sessionId>` follows it locally and regenerates it if
   missing. JSONL stays authoritative; logs rebuild on daemon startup.
+- **packages/client (ADR 0001 step a)**: `@opensocket/client`, framework-
+  agnostic OSSP client — pairing/devices/sessions REST, WS transport
+  (hello-auth, envelope RPC, snapshot + tail, auto-reconnect + re-subscribe
+  with per-reconnect snapshots, client-side unsubscribe filtering), SSE
+  fallback (full replay), WS-down-only HTTP fallback for RPC (never
+  re-submits a sent prompt). Runtime contract: any JS runtime with
+  fetch + WebSocket (browser, Tauri webview, Node >= 22); structural typings
+  so it compiles under DOM lib or @types/node. Tested in `test:client`.
 - **Web UI** (`apps/daemon/public/index.html`, served at `/`): rendered
   transcript, tool cards, approval cards, status/usage pills, session picker,
   composer with send/stop, **pair-with-code + device management**, and a
@@ -115,7 +123,8 @@ Logs: `%TEMP%\opensocket\`.
   hit it). Full tmpfs surfaces as `Unknown system error -122` (= EDQUOT)
   inside the daemon and fails the tests with cryptic assertion errors —
   export `TMPDIR=$HOME/tmp` before running tests/dev-up.sh here. Verified
-  green on this box: typecheck + all 8 test suites, Node 26.11, pi 1.3.0,
+  green on this box: typecheck + all 9 test suites (incl. test:client since
+  2026-10-19), Node 26.11, pi 1.3.0,
   opencode 2.0.32, cargo 1.96 (ADR 0001 desktop target).
 
 ## Decisions already made (do not relitigate without an ADR)
@@ -130,6 +139,12 @@ Logs: `%TEMP%\opensocket\`.
   the Tailscale plan is transport-neutral auth: pairing + per-device
   revocable tokens (replaces the shared devsecret).
 - opencode adapter stays a stub until verified against a real install.
+- **Compaction is harness-owned**: the daemon never summarizes, folds, or
+  rewrites provider context; each harness manages its own window (pi natively,
+  builtin in its loop). Snapshots are derived views, never mutations (R2+R4).
+- **Orchestra is a separate project**: own repo, own roadmap and backlog;
+  OpenSocket consumes it only via the `harness-orchestra` adapter and its
+  documented HTTP contract.
 
 ## Backlog — next work, in priority order
 
@@ -174,13 +189,21 @@ Logs: `%TEMP%\opensocket\`.
    snippets) + `examples/opensocketd.service` (systemd, hardened). Docs only,
    no code (see the transport decision above). Companion app (Expo) can start
    — pairing exists.
-8. **Orchestra upstream**: the provider/error patches are pushed to
-   `Rahuleus12/Orchestra` (`0dab960`); consider a PR upstream if published.
-9. **Compaction** for long sessions (RFC §9) once real usage shows the need.
+8. ~~**Orchestra upstream**~~ — **out of scope**: Orchestra is a separate
+   project (own repo, own backlog); this repo only consumes it through the
+   `harness-orchestra` adapter. The provider/error patches live in
+   `Rahuleus12/Orchestra` (`0dab960`) and are tracked there.
+9. ~~**Compaction** for long sessions~~ — **decided, harness-owned**:
+   compaction is context management, and context management belongs to the
+   harness (R4) — pi compacts its own sessions; `harness-builtin` would do
+   loop-level compaction itself if usage ever demands it. The daemon never
+   folds or rewrites conversation state; JSONL stays append-only (R2).
 10. **Companion app (Tauri 2 — ADR 0001)**: stack decided (owner rejected
     Expo; Dioxus declined for v1; Flutter = fallback). Order of work:
-    (a) `packages/client` — framework-agnostic OSSP client (pairing REST +
-    WS hello/snapshot/tail + SSE fallback), shared with the web UI;
+    (a) ~~`packages/client` — framework-agnostic OSSP client (pairing REST +
+    WS hello/snapshot/tail + SSE fallback), shared with the web UI~~ —
+    **done**: `@opensocket/client` + `test:client` (pair/revoke, WS snapshot
+    + live events + approval round-trip, reconnect dedupe, SSE fallback);
     (b) `apps/mobile` — Tauri 2 shell + Preact/vite frontend, developed on
     Linux against the keyless demo daemon (:8098), desktop target works on
     this box (cargo 1.96 + webkit2gtk-4.1 present);
@@ -190,7 +213,7 @@ Logs: `%TEMP%\opensocket\`.
 ## Verification checklist for a new machine
 
 ```sh
-npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:opencode && npm run test:builtin && npm run test:auth && npm run test:ws
+npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:opencode && npm run test:builtin && npm run test:auth && npm run test:ws && npm run test:client
 # Windows: powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1
 # Linux/macOS (this box: export TMPDIR=$HOME/tmp first): scripts/dev-up.sh
 curl -s http://localhost:8098/health

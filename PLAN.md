@@ -130,8 +130,9 @@ persists as an event log the app can resume from a snapshot.
 **Design rule: everything about providers is handled by the harness.** The daemon
 has no provider registry and never calls a model API itself; the protocol has no
 provider concept. Each adapter fully owns provider discovery, config, API keys,
-model catalogs, selection, requests, retries, fallbacks, rate limits, and
-provider errors — OpenCode and pi already have mature provider ecosystems
+model catalogs, selection, requests, retries, fallbacks, rate limits,
+provider errors, and context management (compaction included). OpenCode and
+pi already have mature provider ecosystems
 (DeepSeek and Ollama included), and `harness-builtin` is the only component that
 speaks to providers directly. The daemon shuttles opaque events; the phone
 displays them. If clients ever need richer model metadata (pricing, context

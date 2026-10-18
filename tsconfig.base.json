@@ -8,7 +8,10 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "types": ["node"],
-    "paths": { "@opensocket/protocol": ["./packages/protocol/src/index.ts"] }
+    "paths": {
+      "@opensocket/protocol": ["./packages/protocol/src/index.ts"],
+      "@opensocket/client": ["./packages/client/src/index.ts"]
+    }
   },
   "exclude": ["node_modules"]
 }
