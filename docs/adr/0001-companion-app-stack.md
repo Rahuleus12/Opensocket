@@ -1,6 +1,9 @@
 # ADR 0001 — Companion app stack: Tauri 2, not Expo/Dioxus/Flutter-native
 
 - **Status:** Accepted (supersedes the Expo choice in PLAN §4.5)
+- **Amended 2026-10-19:** the "iOS builds require macOS" constraint below is
+  relaxed in practice by [xtool](https://github.com/xtool-org/xtool) — see
+  "Amendment: iOS builds on Linux via xtool" at the end.
 - **Date:** 2026-10-18
 - **Deciders:** project owner (explicit no-Expo call) + research pass below
 
@@ -97,3 +100,21 @@ Dioxus is declined for v1.
 - PLAN §4.5 (UI spec — unchanged by this ADR), §9 Open Questions
 - docs/rfc/0001-ossp.md (protocol the app speaks)
 - examples/connect.md (transport recipes the app will use)
+
+## Amendment: iOS builds on Linux via xtool (2026-10-19)
+
+The "build iOS in CI on macOS" plan assumed no iOS toolchain exists on Linux.
+[xtool](https://github.com/xtool-org/xtool) (v1.22) closes most of that gap:
+it cross-compiles SwiftPM packages into signed, installable iOS apps on
+Linux, using the Swift toolchain plus a Darwin SDK generated from a local
+Xcode.xip. Verified on this box: `apps/mobile/ios` (a SwiftUI + WKWebView
+shell around the same vite frontend — no Rust, no Tauri on iOS) builds up to
+the SDK gate via `scripts/build-ios.sh`; remaining user-gated steps are the
+Xcode 27 `.xip` download (Apple ID, browser-only) and one interactive
+`scripts/build-ios.sh sdk-install`. Signing/device install additionally needs
+`xtool auth` (works with a free Apple ID in password mode). The macOS CI job
+stays for hands-off TestFlight distribution; local builds no longer need it.
+Container notes (encoded in scripts/build-ios.sh): run in swift:6.4.1-noble
+(Arch has no Swift), `--security-opt seccomp=unconfined` (SwiftNIO), and a
+real stdin pipe — xtool epoll-registers stdin, and docker's /dev/null default
+kills it with EPERM.

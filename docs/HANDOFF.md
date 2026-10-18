@@ -63,6 +63,15 @@ Everything below is **implemented and verified live** on the authoring PC:
   `tsc -p apps/mobile`, `cargo check` (1m07s cold). Icons: full set from
   `scripts/gen-app-icon.ts` via `tauri icon`. Not yet: real-device walkthrough,
   iOS CI (needs macOS + Apple Developer Program).
+- **iOS on Linux (ADR 0001 amendment, xtool)**: `apps/mobile/ios` is a
+  SwiftPM shell (SwiftUI + WKWebView loading the bundled `www/` from the
+  same vite frontend; ATS exception in its Info.plist) built by
+  `scripts/build-ios.sh` (swift:6.4.1-noble container + the xtool AppImage,
+  extracted once to avoid FUSE; seccomp=unconfined; real stdin pipe — see
+  the script comments for why). Pipeline verified to the SDK gate; needs
+  from the user: Xcode 27 `.xip` (browser + Apple ID), then one
+  `scripts/build-ios.sh sdk-install`; `xtool auth` only for signing/device
+  install. macOS CI stays for hands-off TestFlight.
 - **Web UI** (`apps/daemon/public/index.html`, served at `/`): rendered
   transcript, tool cards, approval cards, status/usage pills, session picker,
   composer with send/stop, **pair-with-code + device management**, and a

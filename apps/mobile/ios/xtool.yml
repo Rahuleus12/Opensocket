@@ -1,0 +1,6 @@
+version: 1
+bundleID: dev.opensocket.mobile
+infoPath: Info.plist
+iconPath: ../app-icon.png
+resources:
+  - www

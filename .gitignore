@@ -10,3 +10,5 @@ demo/pi-agent/models-store.json
 src-tauri/target/
 src-tauri/gen/schemas/
 apps/mobile/src-tauri/gen/schemas/
+apps/mobile/ios/www/
+apps/mobile/ios/.build/
