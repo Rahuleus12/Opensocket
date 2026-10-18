@@ -264,9 +264,12 @@ and keys are never synced to or rendered on the phone.
 
 ### 4.5 Companion mobile app
 
-**Stack:** Expo / React Native + TypeScript; imports `packages/protocol` types and
-the generated API client. Chosen for shared language and fast iteration; the protocol
-layer keeps a native rewrite possible later (see Open Questions).
+**Stack:** Tauri 2 + TypeScript web frontend (Preact), per
+[ADR 0001](docs/adr/0001-companion-app-stack.md) — supersedes the original
+Expo choice (owner decision). Imports `packages/protocol` types and the shared
+`packages/client`; the same frontend serves the desktop companion and web PWA.
+Flutter is the documented fallback; iOS builds run in CI on a macOS runner
+(no iOS toolchain exists on the Linux dev box — true for every framework).
 
 **Design principle: it is a reading surface, not a terminal.**
 
@@ -339,7 +342,7 @@ opensocket/
     harness-builtin/       direct-provider agent (DeepSeek, Ollama, …)
   apps/
     daemon/                opensocketd
-    mobile/                Expo companion app
+    mobile/                Tauri 2 companion app (ADR 0001)
     web/                   thin PWA reusing the protocol client (M3)
   examples/
     connect.md             recipes: LAN, Tailscale, SSH tunnel, VPS + TLS
@@ -368,7 +371,7 @@ opensocket/
   reconnect.
 - `harness-opencode` complete with conformance fixtures.
 - Pairing (QR + per-device revocable tokens).
-- Expo app: transcript UI, streaming markdown + code rendering, interrupt,
+- Companion app (Tauri 2, ADR 0001): transcript UI, streaming markdown + code rendering, interrupt,
   session list, status bar.
 - **Exit:** daily-drivable for real code tasks at home.
 
@@ -418,7 +421,9 @@ opensocket/
 
 ## 9. Open questions
 
-- Native (Swift/Kotlin) rewrite long-term, or Expo forever? (Protocol layer keeps both viable.)
+- ~~Native (Swift/Kotlin) rewrite long-term, or Expo forever?~~ Answered by
+  [ADR 0001](docs/adr/0001-companion-app-stack.md): Tauri 2 + TS frontend; a
+  native Swift shell remains viable later because OSSP is transport-level.
 - Multi-user households: share one daemon across users in v1, or single-user first?
 - Voice input (Whisper on the host) — worth it for mobile ergonomics?
 - Checkpoints/undo: normalize across harnesses, or pass through raw per-harness?

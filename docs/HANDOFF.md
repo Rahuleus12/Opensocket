@@ -166,8 +166,15 @@ Logs: `%TEMP%\opensocket\`.
 8. **Orchestra upstream**: the provider/error patches are pushed to
    `Rahuleus12/Orchestra` (`0dab960`); consider a PR upstream if published.
 9. **Compaction** for long sessions (RFC §9) once real usage shows the need.
-10. **Companion app (Expo)**: the M1 substrate is ready (pairing + WS +
-    snapshots); start the Expo shell per PLAN §4.5.
+10. **Companion app (Tauri 2 — ADR 0001)**: stack decided (owner rejected
+    Expo; Dioxus declined for v1; Flutter = fallback). Order of work:
+    (a) `packages/client` — framework-agnostic OSSP client (pairing REST +
+    WS hello/snapshot/tail + SSE fallback), shared with the web UI;
+    (b) `apps/mobile` — Tauri 2 shell + Preact/vite frontend, developed on
+    Linux against the keyless demo daemon (:8098), desktop target works on
+    this box (cargo 1.96 + webkit2gtk-4.1 present);
+    (c) CI — GitHub Actions `macos-15` job for `tauri ios build` → TestFlight
+    (needs Apple Developer Program; no iOS toolchain on Linux for any stack).
 
 ## Verification checklist for a new machine
 
