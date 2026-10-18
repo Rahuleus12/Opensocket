@@ -102,6 +102,8 @@ const cfg: Config = {
   builtinApiKey: "mock",
   builtinModel: "mock-gpt",
   dataDir,
+  identityHeaders: [],
+  identityEnforce: false,
 };
 
 const server = await startServer(cfg);

@@ -24,6 +24,10 @@ export interface Config {
   defaultModel?: string;
   /** Root for JSONL session storage. */
   dataDir: string;
+  /** Proxy identity headers to trust+record (e.g. tailscale-user-login). */
+  identityHeaders: string[];
+  /** When true, a bound proxy identity must match on every device request. */
+  identityEnforce: boolean;
 }
 
 export function loadConfig(
@@ -47,5 +51,10 @@ export function loadConfig(
     ntfyToken: env.NTFY_TOKEN,
     defaultModel: env.OPENSOCKET_MODEL,
     dataDir: env.OPENSOCKET_DATA ?? "~/.opensocket",
+    identityHeaders: (env.OPENSOCKET_IDENTITY_HEADERS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    identityEnforce: env.OPENSOCKET_IDENTITY_ENFORCE === "1",
   };
 }

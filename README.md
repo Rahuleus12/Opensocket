@@ -17,10 +17,32 @@ persistence. Runs on Node ≥ 24
 ## Layout
 
 - `docs/rfc/0001-ossp.md` — OSSP wire/persistence protocol (draft)
+- `examples/connect.md` — LAN / Tailscale / SSH / VPS connection recipes
+- `examples/opensocketd.service` — systemd unit
 - `packages/protocol/` — OSSP TypeScript types
 - `apps/daemon/` — `opensocketd` v0: SSE fan-out, JSONL store, harness adapters
   (`src/orchestra.ts`, `src/pi.ts`, `src/opencode.ts`), tests in `test/`
 - `PLAN.md` — architecture, roadmap, decisions
+
+## Auth (M1): pairing, no accounts
+
+On first boot (no paired devices) the daemon prints a single-use 6-word
+pairing code. Open the web UI and click **Pair** (or `POST /api/pair
+{"code":"…","name":"my phone"}`) to mint a per-device token — hashed at
+rest, listed, and revocable from any paired device. The shared `DAEMON_TOKEN`
+remains as the loudly dev-only quick start. See `examples/connect.md` for
+LAN / Tailscale / SSH-tunnel / VPS recipes.
+
+## Transport
+
+HTTP + JSON for requests, with two event streams:
+
+- **WebSocket** (`/ws`, RFC §3): auth via first message
+  (`{"type":"hello","payload":{"token":…}}`), then envelope requests
+  (`session.create`, `prompt.send`, `permission.respond`, …) with `ok`/`error`
+  replies, plus a `snapshot` + live tail on `session.resume`. The web UI uses
+  this by default.
+- **SSE** (`GET /sse/<sessionId>`): the fallback; full replay on connect.
 
 ## Run (M0)
 
@@ -44,6 +66,8 @@ npm run test:smoke     # full pipeline vs an Orchestra contract test double
 npm run test:pi        # live pi RPC protocol check (needs `pi` on PATH)
 npm run test:opencode  # live opencode check (needs `opencode` on PATH; keyless)
 npm run test:builtin   # built-in agent vs the OpenAI mock
+npm run test:auth      # pairing, device tokens, revocation, identity
+npm run test:ws        # WebSocket transport vs the builtin harness + mock
 npm run typecheck
 ```
 
@@ -84,6 +108,8 @@ and **task finished** (15s cooldown) for every harness.
 | `NTFY_URL`       | _(unset = off)_          | ntfy topic URL for pushes      |
 | `NTFY_TOKEN`     | _(unset)_                | Bearer token (self-hosted ntfy)|
 | `OPENSOCKET_DATA`| `~/.opensocket`          | JSONL session storage root     |
+| `OPENSOCKET_IDENTITY_HEADERS` | _(unset)_ | Proxy identity headers (e.g. `tailscale-user-login`) |
+| `OPENSOCKET_IDENTITY_ENFORCE` | `0`       | `1` = bound identity must match |
 
 ## Typecheck
 

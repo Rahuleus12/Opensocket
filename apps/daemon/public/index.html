@@ -13,6 +13,7 @@
   .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: #1c2029; border: 1px solid #2a2f3a; color: #9aa3b2; }
   .pill.run { color: var(--accent); border-color: #155e75; }
   .pill.err { color: #fca5a5; border-color: #7f1d1d; }
+  .pill.ws { color: #86efac; border-color: #14532d; }
   .grow { flex: 1; }
   select, input, textarea, button { font: inherit; background: #1c2029; color: inherit; border: 1px solid #2a2f3a; border-radius: 8px; padding: 6px 10px; }
   button { cursor: pointer; } button:hover { background: #242a35; }
@@ -31,7 +32,7 @@
   textarea#input { flex: 1; resize: none; }
 
   /* drawer */
-  #drawer { position: fixed; inset: 0 30% 0 0; max-width: 380px; background: var(--panel); border-right: 1px solid var(--line); transform: translateX(-102%); transition: transform .18s ease; z-index: 20; display: flex; flex-direction: column; }
+  #drawer { position: fixed; inset: 0 30% 0 0; max-width: 380px; background: var(--panel); border-right: 1px solid var(--line); transform: translateX(-102%); transition: transform .18s ease; z-index: 20; display: flex; flex-direction: column; overflow-y: auto; }
   #drawer.open { transform: none; box-shadow: 8px 0 30px rgba(0,0,0,.45); }
   #scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 15; display: none; }
   #scrim.on { display: block; }
@@ -51,10 +52,20 @@
   #drawer form button { align-self: flex-start; }
   .archived-h { font-size: 11px; color: var(--dim); padding: 8px 14px 2px; }
   .sess.archived { opacity: .55; }
+
+  /* devices */
+  #devices { padding: 4px 14px 14px; }
+  .dev { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #1a1d24; font-size: 13px; }
+  .dev .dn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev .dm { font-size: 11px; color: var(--dim); }
+  .dev.revoked .dn { text-decoration: line-through; opacity: .5; }
+  .codebox { font-family: ui-monospace, Consolas, monospace; background: #0c0e12; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; color: #86efac; user-select: all; }
+  .pairrow { display: flex; gap: 6px; margin: 6px 0; }
+  .pairrow input { flex: 1; min-width: 0; font-size: 13px; }
+  #pairCodeWrap { display: none; }
   @media (min-width: 1100px) {
     #drawer { position: static; transform: none; max-width: 340px; height: 100dvh; box-shadow: none; }
     #scrim.on { display: none; }
-    body.drawer-open main, body.drawer-open footer, body.drawer-open > header { margin-left: 0; }
     body { flex-direction: row; flex-wrap: wrap; }
     #frame { display: flex; flex: 1; flex-direction: column; height: 100dvh; min-width: 0; }
   }
@@ -67,10 +78,12 @@
   <button id="menuBtn" title="Sessions">☰</button>
   <strong>OpenSocket</strong>
   <span class="pill" id="status">idle</span>
+  <span class="pill" id="transport">—</span>
   <span class="pill" id="harness">—</span>
   <span class="pill" id="usage">0 tok</span>
   <span class="grow"></span>
-  <input id="token" type="password" placeholder="daemon token">
+  <input id="token" type="password" placeholder="device token">
+  <button id="pairBtn" title="Pair this browser with a code from the daemon console">Pair</button>
 </header>
 <main id="log"><div class="banner">Pick or create a session from the ☰ drawer.</div></main>
 <footer>
@@ -96,22 +109,146 @@
   <div id="sessList"></div>
   <div class="archived-h" id="archH" style="display:none">ARCHIVED</div>
   <div id="archList"></div>
+  <h2>Devices</h2>
+  <div id="devices">
+    <div class="pairrow">
+      <input id="pairCodeInput" placeholder="pairing code (from daemon console)">
+      <button id="pairGo">Pair</button>
+    </div>
+    <div id="pairCodeWrap">
+      <div class="dm">New code — enter it on the other device:</div>
+      <div class="codebox" id="pairCodeOut"></div>
+    </div>
+    <button id="mintBtn">+ Add another device</button>
+    <div id="devList"></div>
+  </div>
 </aside>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const hdrs = () => ({ "content-type": "application/json", authorization: "Bearer " + $("token").value });
 $("token").value = localStorage.getItem("os_token") || "";
-$("token").addEventListener("change", () => localStorage.setItem("os_token", $("token").value));
+$("token").addEventListener("change", () => { localStorage.setItem("os_token", $("token").value); wsReconnect(); });
 
 const msgs = new Map();   // messageId -> {el, text, role}
 const tools = new Map();  // toolId -> card element
 let current = null, ctrl = null;
 
+/* ------------------------------------------------------------------ */
+/* transport: WebSocket first (RFC §3), SSE fallback. rpc() maps the   */
+/* envelope requests onto WS when connected, HTTP otherwise.           */
+/* ------------------------------------------------------------------ */
+let ws = null, wsWant = false, wsReqSeq = 0;
+const wsPending = new Map(); // reqId -> {res, rej}
+
+function wsOpen() { return ws && ws.readyState === 1; }
+
+function wsConnect() {
+  if (!wsWant || wsOpen() || !$("token").value) return;
+  try { ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); }
+  catch { ws = null; setTransport("sse"); return; }
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "hello", payload: { token: $("token").value } }));
+  };
+  ws.onmessage = (ev) => {
+    let f; try { f = JSON.parse(ev.data); } catch { return; }
+    if ((f.type === "ok" || f.type === "error") && f.payload && wsPending.has(f.payload.reqId)) {
+      const p = wsPending.get(f.payload.reqId); wsPending.delete(f.payload.reqId);
+      if (f.type === "ok") p.res(f.payload); else p.rej(new Error(f.payload.message || f.payload.code));
+      return;
+    }
+    if (f.type === "snapshot") { applySnapshot(f.payload); setTransport("ws"); return; }
+    handle(f);
+  };
+  ws.onclose = () => {
+    for (const p of wsPending.values()) p.rej(new Error("ws closed"));
+    wsPending.clear();
+    if (wsWant) setTimeout(wsConnect, 1500); // auto-reconnect + resume below
+  };
+  ws.onerror = () => {};
+}
+function wsReconnect() {
+  if (ws) { const old = ws; ws = null; try { old.close(); } catch {} }
+  wsWant = true;
+  wsConnect();
+  if (current) wsResume(current);
+}
+function wsResume(id) {
+  if (!wsOpen()) return;
+  ws.send(JSON.stringify({ id: "req_resume_" + (++wsReqSeq), type: "session.resume", payload: { sessionId: id } }));
+}
+function wsRpc(type, payload) {
+  if (!wsOpen()) return null;
+  const id = "req_" + (++wsReqSeq);
+  return new Promise((res, rej) => {
+    wsPending.set(id, { res, rej });
+    ws.send(JSON.stringify({ id, type, payload }));
+    setTimeout(() => { if (wsPending.has(id)) { wsPending.delete(id); rej(new Error("rpc timeout")); } }, 15000);
+  });
+}
+async function rpc(type, payload) {
+  const viaWs = await wsRpc(type, payload);
+  if (viaWs) return viaWs;
+  // HTTP fallback
+  if (type === "session.create") {
+    const r = await fetch("/api/session", { method: "POST", headers: hdrs(), body: JSON.stringify(payload) });
+    if (!r.ok) throw new Error("create failed: " + r.status);
+    return await r.json();
+  }
+  if (type === "session.list") {
+    const r = await fetch("/api/session?all=1", { headers: hdrs() });
+    if (!r.ok) throw new Error("list failed: " + r.status);
+    return await r.json();
+  }
+  if (type === "prompt.send") {
+    const r = await fetch("/api/session/" + payload.sessionId + "/prompt", { method: "POST", headers: hdrs(), body: JSON.stringify({ text: payload.text }) });
+    if (!r.ok) throw new Error("prompt failed: " + r.status);
+    return {};
+  }
+  if (type === "interrupt") {
+    await fetch("/api/session/" + payload.sessionId + "/interrupt", { method: "POST", headers: hdrs() });
+    return {};
+  }
+  if (type === "permission.respond") {
+    await fetch("/api/session/" + payload.sessionId + "/permission", { method: "POST", headers: hdrs(), body: JSON.stringify({ requestId: payload.requestId, decision: payload.decision }) });
+    return {};
+  }
+  throw new Error("unsupported rpc: " + type);
+}
+
+function setTransport(t) {
+  const el = $("transport");
+  el.textContent = t;
+  el.className = "pill" + (t === "ws" ? " ws" : "");
+}
+
+/* SSE fallback (same shape as before) */
+async function sseConnect(id) {
+  ctrl?.abort(); ctrl = new AbortController();
+  setTransport("sse");
+  const res = await fetch("/sse/" + id, { headers: { authorization: "Bearer " + $("token").value }, signal: ctrl.signal });
+  if (!res.ok) { setTransport("off"); return; }
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of frame.split("\n"))
+        if (line.startsWith("data:")) { try { handle(JSON.parse(line.slice(5))); } catch {} }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* drawer */
+/* ------------------------------------------------------------------ */
 function drawerOpen(open) {
   $("drawer").classList.toggle("open", open);
   $("scrim").classList.toggle("on", open && window.innerWidth < 1100);
+  if (open) loadDevices();
 }
 $("menuBtn").onclick = () => drawerOpen(!$("drawer").classList.contains("open"));
 $("scrim").onclick = () => drawerOpen(false);
@@ -137,6 +274,28 @@ function setStatus(s) {
   el.textContent = s;
   el.className = "pill" + (s === "running" || s === "thinking" ? " run" : s === "error" ? " err" : "");
 }
+function applySnapshot(snap) {
+  msgs.clear(); tools.clear();
+  const m = snap.meta || {};
+  $("harness").textContent = (m.harness || "?") + (m.model ? " / " + m.model : "");
+  const seenTool = new Set();
+  for (const msg of snap.messages || []) {
+    const rec = addMsg(msg.messageId, msg.role || "assistant");
+    rec.text = msg.text || ""; rec.el.innerHTML = md(rec.text || "(empty)");
+  }
+  for (const t of snap.tools || []) {
+    if (seenTool.has(t.toolId)) continue; seenTool.add(t.toolId);
+    const d = document.createElement("details");
+    d.className = "tool";
+    d.innerHTML = "<summary>tool " + t.name + " " + (t.status === "done" ? "✓" : "…") + "</summary>";
+    $("log").appendChild(d);
+    tools.set(t.toolId, d);
+  }
+  const u = snap.usage || {};
+  $("usage").textContent = (u.tokensIn || 0) + " in / " + (u.tokensOut || 0) + " out tok";
+  setStatus("idle");
+  $("log").scrollTop = $("log").scrollHeight;
+}
 function handle(env) {
   const p = env.payload;
   switch (env.type) {
@@ -156,12 +315,18 @@ function handle(env) {
       break;
     }
     case "tool.call": {
-      const d = document.createElement("details");
-      d.className = "tool";
-      d.innerHTML = "<summary>tool " + p.name + " … running</summary><pre></pre>";
-      d.querySelector("pre").textContent = p.argsSummary;
-      $("log").appendChild(d);
-      tools.set(p.toolId, d);
+      let d = tools.get(p.toolId);
+      if (!d) {
+        d = document.createElement("details");
+        d.className = "tool";
+        d.innerHTML = "<summary>tool " + p.name + " … running</summary><pre></pre>";
+        d.querySelector("pre").textContent = p.argsSummary;
+        $("log").appendChild(d);
+        tools.set(p.toolId, d);
+      } else {
+        d.querySelector("summary").textContent = "tool " + p.name + " … running";
+        d.querySelector("pre").textContent = p.argsSummary;
+      }
       break;
     }
     case "tool.result": {
@@ -184,10 +349,7 @@ function handle(env) {
       if (p.riskHints) d.querySelector("summary").textContent += " — " + p.riskHints.join(", ");
       d.querySelectorAll("button").forEach((b) => {
         b.onclick = () => {
-          fetch("/api/session/" + current + "/permission", {
-            method: "POST", headers: hdrs(),
-            body: JSON.stringify({ requestId: p.requestId, decision: b.dataset.d }),
-          });
+          rpc("permission.respond", { sessionId: current, requestId: p.requestId, decision: b.dataset.d }).catch(() => {});
           d.querySelector("summary").textContent = "approval: " + b.dataset.d + " — " + p.tool;
           d.querySelectorAll("button").forEach((x) => (x.disabled = true));
         };
@@ -205,7 +367,10 @@ function handle(env) {
       break;
     }
     case "status": setStatus(p); break;
-    case "usage": $("usage").textContent = p.tokensIn + " in / " + p.tokensOut + " out tok"; break;
+    case "usage":
+      $("usage").textContent = p.tokensIn + " in / " + p.tokensOut + " out tok" +
+        (p.costEstimate !== undefined && p.costEstimate > 0 ? " · $" + Number(p.costEstimate).toFixed(4) : "");
+      break;
     case "error": {
       const b = document.createElement("div");
       b.className = "banner"; b.textContent = p.message;
@@ -217,30 +382,18 @@ function handle(env) {
 }
 
 async function connect(id) {
-  ctrl?.abort(); ctrl = new AbortController();
   current = id; $("log").innerHTML = ""; msgs.clear(); tools.clear();
   setStatus("idle"); $("usage").textContent = "0 tok"; $("harness").textContent = "—";
   drawerOpen(false);
-  const res = await fetch("/sse/" + id, { headers: { authorization: "Bearer " + $("token").value }, signal: ctrl.signal });
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const frame = buf.slice(0, i); buf = buf.slice(i + 2);
-      for (const line of frame.split("\n"))
-        if (line.startsWith("data:")) { try { handle(JSON.parse(line.slice(5))); } catch {} }
-    }
-  }
+  if (wsOpen()) { wsResume(id); setTransport("ws"); }
+  else sseConnect(id);
 }
 function sessLabel(s) { return s.name || s.sessionId.slice(0, 13) + "…"; }
 function sessCard(s) {
   const d = document.createElement("div");
   d.className = "sess" + (s.archived ? " archived" : "") + (s.sessionId === current ? " current" : "");
-  const cost = s.usage && s.usage.totalTokens !== undefined && s.usage.annotations?.cost !== undefined
-    ? "$" + Number(s.usage.annotations.cost).toFixed(4) : "";
+  const cost = s.usage && (s.usage.costEstimate !== undefined || s.usage.annotations?.cost !== undefined)
+    ? "$" + Number(s.usage.costEstimate ?? s.usage.annotations.cost).toFixed(4) : "";
   const tok = s.usage ? s.usage.tokensIn + "/" + s.usage.tokensOut + " tok" : "";
   d.innerHTML = '<div class="n"><span class="nm"></span></div>' +
     '<div class="meta"><span>' + (s.harness || "?") + "</span>" +
@@ -265,36 +418,103 @@ function sessCard(s) {
   return d;
 }
 async function loadSessions() {
-  const res = await fetch("/api/session?all=1", { headers: hdrs() });
-  if (!res.ok) {
+  try {
+    const data = await rpc("session.list", { all: true });
+    const live = data.sessions.filter((s) => !s.archived);
+    const archived = data.sessions.filter((s) => s.archived);
+    $("sessList").innerHTML = "";
+    if (!live.length) $("sessList").innerHTML = '<div class="sess"><div class="n"><span class="nm">no sessions yet</span></div></div>';
+    for (const s of live) $("sessList").appendChild(sessCard(s));
+    $("archList").innerHTML = "";
+    $("archH").style.display = archived.length ? "block" : "none";
+    for (const s of archived) $("archList").appendChild(sessCard(s));
+  } catch {
     $("sessList").innerHTML = '<div class="sess"><div class="n"><span class="nm">auth failed</span></div></div>';
-    return;
   }
-  const data = await res.json();
-  const live = data.sessions.filter((s) => !s.archived);
-  const archived = data.sessions.filter((s) => s.archived);
-  $("sessList").innerHTML = "";
-  if (!live.length) $("sessList").innerHTML = '<div class="sess"><div class="n"><span class="nm">no sessions yet</span></div></div>';
-  for (const s of live) $("sessList").appendChild(sessCard(s));
-  $("archList").innerHTML = "";
-  $("archH").style.display = archived.length ? "block" : "none";
-  for (const s of archived) $("sessList") && $("archList").appendChild(sessCard(s));
 }
+
+/* ------------------------------------------------------------------ */
+/* pairing + devices */
+/* ------------------------------------------------------------------ */
+async function pairWith(code, name) {
+  const r = await fetch("/api/pair", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code, name }),
+  });
+  if (!r.ok) throw new Error((await r.json()).error || ("pair failed: " + r.status));
+  const { token } = await r.json();
+  $("token").value = token;
+  localStorage.setItem("os_token", token);
+  wsReconnect();
+  loadSessions();
+  return true;
+}
+function guessDeviceName() {
+  const ua = navigator.userAgent;
+  if (ua.includes("Android")) return "Android browser";
+  if (ua.includes("iPhone") || ua.includes("iPad")) return "iOS browser";
+  if (ua.includes("Mac")) return "Mac browser";
+  if (ua.includes("Windows")) return "Windows browser";
+  if (ua.includes("Linux")) return "Linux browser";
+  return "web client";
+}
+$("pairBtn").onclick = async () => {
+  const code = prompt("Pairing code (printed by the daemon console):");
+  if (!code) return;
+  try { await pairWith(code, guessDeviceName()); alert("Paired. Token saved for this browser."); loadDevices(); }
+  catch (e) { alert(String(e.message || e)); }
+};
+$("pairGo").onclick = async () => {
+  const code = $("pairCodeInput").value.trim();
+  if (!code) return;
+  try { await pairWith(code, guessDeviceName()); $("pairCodeInput").value = ""; loadDevices(); }
+  catch (e) { alert(String(e.message || e)); }
+};
+$("mintBtn").onclick = async () => {
+  const r = await fetch("/api/pair/code", { method: "POST", headers: hdrs() });
+  if (!r.ok) { alert("mint failed: " + r.status); return; }
+  const { code } = await r.json();
+  $("pairCodeOut").textContent = code;
+  $("pairCodeWrap").style.display = "block";
+};
+async function loadDevices() {
+  try {
+    const r = await fetch("/api/device", { headers: hdrs() });
+    if (!r.ok) { $("devList").innerHTML = '<div class="dm">—</div>'; return; }
+    const { devices } = await r.json();
+    $("devList").innerHTML = "";
+    for (const d of devices) {
+      const el = document.createElement("div");
+      el.className = "dev" + (d.revoked ? " revoked" : "");
+      el.innerHTML = '<span class="dn"></span><span class="dm"></span>';
+      el.querySelector(".dn").textContent = d.name + (d.identity ? " · " + d.identity : "");
+      el.querySelector(".dm").textContent = new Date(d.lastSeen).toLocaleString();
+      if (!d.revoked) {
+        const b = document.createElement("button");
+        b.textContent = "Revoke";
+        b.onclick = () => fetch("/api/device/" + d.id + "/revoke", { method: "POST", headers: hdrs() }).then(loadDevices);
+        el.appendChild(b);
+      }
+      $("devList").appendChild(el);
+    }
+  } catch { $("devList").innerHTML = ""; }
+}
+
+/* ------------------------------------------------------------------ */
+/* composer */
+/* ------------------------------------------------------------------ */
 $("newForm").onsubmit = async (e) => {
   e.preventDefault();
-  const res = await fetch("/api/session", {
-    method: "POST", headers: hdrs(),
-    body: JSON.stringify({
+  try {
+    const data = await rpc("session.create", {
       harness: $("harnessPick").value,
       workspace: $("workspace").value || "default",
       model: $("model").value || undefined,
       name: $("sessName").value || undefined,
-    }),
-  });
-  if (!res.ok) { alert("create failed: " + res.status); return; }
-  const data = await res.json();
-  await loadSessions();
-  connect(data.sessionId);
+    });
+    await loadSessions();
+    connect(data.sessionId);
+  } catch (err) { alert(String(err.message || err)); }
 };
 $("send").onclick = send;
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ctrlKey) send(); });
@@ -302,9 +522,12 @@ async function send() {
   if (!current) { alert("no session"); return; }
   const text = $("input").value.trim(); if (!text) return;
   $("input").value = "";
-  await fetch("/api/session/" + current + "/prompt", { method: "POST", headers: hdrs(), body: JSON.stringify({ text }) });
+  try { await rpc("prompt.send", { sessionId: current, text }); } catch (e) { alert(String(e.message || e)); }
 }
-$("stop").onclick = () => { if (current) fetch("/api/session/" + current + "/interrupt", { method: "POST", headers: hdrs() }); };
+$("stop").onclick = () => { if (current) rpc("interrupt", { sessionId: current }).catch(() => {}); };
+
+/* boot: WS when a token is stored, SSE fallback otherwise */
+if ($("token").value) wsReconnect();
 loadSessions();
 </script>
 </body>

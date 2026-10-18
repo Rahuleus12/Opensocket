@@ -1,0 +1,28 @@
+[Unit]
+Description=OpenSocket daemon (opensocketd)
+Documentation=https://github.com/Rahuleus12/redesigned-goggles
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to your install location and node version (>= 24 for TS stripping).
+WorkingDirectory=/opt/opensocket
+ExecStart=/usr/bin/node apps/daemon/src/index.ts
+Environment=PORT=8097
+# Model keys live in EnvironmentFile (chmod 600, root-owned), never in the repo.
+EnvironmentFile=-/etc/opensocket/opensocketd.env
+Restart=on-failure
+RestartSec=3
+
+# Hardening
+DynamicUser=yes
+StateDirectory=opensocket
+Environment=OPENSOCKET_DATA=/var/lib/opensocket
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
