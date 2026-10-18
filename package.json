@@ -6,8 +6,11 @@
     "apps/*"
   ],
   "scripts": {
-    "typecheck": "tsc -p apps/daemon",
+    "typecheck": "tsc -p apps/daemon && tsc -p apps/mobile",
     "dev:daemon": "node apps/daemon/src/index.ts",
+    "dev:mobile": "npm run dev -w @opensocket/mobile",
+    "build:mobile": "npm run build -w @opensocket/mobile",
+    "tauri:dev": "npm run tauri -w @opensocket/mobile -- dev",
     "test:smoke": "node apps/daemon/test/smoke.ts",
     "test:pi": "node apps/daemon/test/pi-protocol.ts",
     "test:opencode": "node apps/daemon/test/opencode.ts",

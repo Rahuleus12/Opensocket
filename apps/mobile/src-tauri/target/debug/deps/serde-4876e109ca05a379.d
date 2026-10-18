@@ -1,0 +1,14 @@
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/deps/serde-4876e109ca05a379.d: /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/build/serde-4c24fa2ce4759ef2/out/private.rs
+
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/deps/libserde-4876e109ca05a379.rlib: /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/build/serde-4c24fa2ce4759ef2/out/private.rs
+
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/deps/libserde-4876e109ca05a379.rmeta: /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/build/serde-4c24fa2ce4759ef2/out/private.rs
+
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/build/serde-4c24fa2ce4759ef2/out/private.rs:
+
+# env-dep:OUT_DIR=/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/build/serde-4c24fa2ce4759ef2/out

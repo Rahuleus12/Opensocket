@@ -52,6 +52,17 @@ Everything below is **implemented and verified live** on the authoring PC:
   re-submits a sent prompt). Runtime contract: any JS runtime with
   fetch + WebSocket (browser, Tauri webview, Node >= 22); structural typings
   so it compiles under DOM lib or @types/node. Tested in `test:client`.
+- **apps/mobile (ADR 0001 step b, scaffolded)**: Tauri 2 shell (identifier
+  `dev.opensocket.mobile`, no custom Rust commands — the webview speaks OSSP
+  directly) + Preact/vite frontend on `@opensocket/client`: setup screen
+  (URL + token or pair-with-code), session drawer, streaming transcript,
+  approval cards, composer; reconnects re-render from the re-delivered
+  snapshot. Daemon gained CORS (OPTIONS preflight + allow-origin; auth stays
+  Bearer, so "*" relaxes nothing) — needed by the tauri://localhost origin,
+  tested in `test:client`. Verified on this box: `vite build`,
+  `tsc -p apps/mobile`, `cargo check` (1m07s cold). Icons: full set from
+  `scripts/gen-app-icon.ts` via `tauri icon`. Not yet: real-device walkthrough,
+  iOS CI (needs macOS + Apple Developer Program).
 - **Web UI** (`apps/daemon/public/index.html`, served at `/`): rendered
   transcript, tool cards, approval cards, status/usage pills, session picker,
   composer with send/stop, **pair-with-code + device management**, and a
@@ -206,7 +217,9 @@ Logs: `%TEMP%\opensocket\`.
     + live events + approval round-trip, reconnect dedupe, SSE fallback);
     (b) `apps/mobile` — Tauri 2 shell + Preact/vite frontend, developed on
     Linux against the keyless demo daemon (:8098), desktop target works on
-    this box (cargo 1.96 + webkit2gtk-4.1 present);
+    this box (cargo 1.96 + webkit2gtk-4.1 present) — **scaffolded, see the
+    state-at-a-glance bullet above**; next: real-use polish (markdown/diff
+    rendering, session drawer metadata, long-list scroll check);
     (c) CI — GitHub Actions `macos-15` job for `tauri ios build` → TestFlight
     (needs Apple Developer Program; no iOS toolchain on Linux for any stack).
 
@@ -214,6 +227,8 @@ Logs: `%TEMP%\opensocket\`.
 
 ```sh
 npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:opencode && npm run test:builtin && npm run test:auth && npm run test:ws && npm run test:client
+npm run build:mobile             # companion frontend (vite + tsc)
+(cd apps/mobile/src-tauri && cargo check)  # companion Rust shell
 # Windows: powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1
 # Linux/macOS (this box: export TMPDIR=$HOME/tmp first): scripts/dev-up.sh
 curl -s http://localhost:8098/health

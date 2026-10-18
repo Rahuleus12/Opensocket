@@ -1,0 +1,10 @@
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/deps/toml_writer-d34bfa538dc5f37b.d: /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/lib.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/integer.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/key.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/string.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/value.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/write.rs
+
+/home/rahul/CODE/redesigned-goggles/apps/mobile/src-tauri/target/debug/deps/libtoml_writer-d34bfa538dc5f37b.rmeta: /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/lib.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/integer.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/key.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/string.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/value.rs /home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/write.rs
+
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/lib.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/integer.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/key.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/string.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/value.rs:
+/home/rahul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.1.3+spec-1.1.0/src/write.rs:

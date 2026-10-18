@@ -7,3 +7,6 @@ Thumbs.db
 workspaces/
 demo/pi-agent/auth.json
 demo/pi-agent/models-store.json
+src-tauri/target/
+src-tauri/gen/schemas/
+apps/mobile/src-tauri/gen/schemas/

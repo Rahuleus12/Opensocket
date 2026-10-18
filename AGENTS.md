@@ -13,6 +13,9 @@ npm run test:pi        # live pi RPC check (needs `pi` on PATH, no model calls)
 npm run test:builtin   # builtin agent vs the OpenAI mock (no keys)
 npm run test:client    # @opensocket/client vs a real daemon + mock (no keys)
 npm run dev:daemon     # run opensocketd (Node >= 24, native TS stripping)
+npm run dev:mobile     # companion app vite dev server (:5173, against :8098)
+npm run tauri:dev      # companion app in a native desktop window
+npm run build:mobile   # vite production build (what `tauri build` embeds)
 powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1    # full stack (Windows)
 powershell -ExecutionPolicy Bypass -File scripts/dev-down.ps1  # stop it
 scripts/dev-up.sh      # full stack (Linux/macOS; keyless demo if no ORCHESTRA_DIR)
@@ -34,7 +37,11 @@ scripts/dev-down.sh    # stop it
   hello-auth + snapshot/tail + auto-resume, SSE fallback); used by the
   Tauri companion app and shareable with the web UI
 - `demo/pi-agent/` — pi config for keyless demos (models.json, approval ext)
-- `scripts/` — dev-up/down (Windows), mock-orchestra, mock-openai
+- `apps/mobile/` — Tauri 2 companion app (ADR 0001): Preact/vite frontend on
+  `@opensocket/client` + a thin Rust shell (no custom commands); desktop
+  target verified via `cargo check` on this box
+- `scripts/` — dev-up/down (Windows), mock-orchestra, mock-openai,
+  gen-app-icon
 
 ## Hard rules
 
