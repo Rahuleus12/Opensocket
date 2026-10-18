@@ -39,6 +39,10 @@ Everything below is **implemented and verified live** on the authoring PC:
   (`permission.asked` → OSSP `permission.request`, reply `once|always|reject`).
   Tested in `test:opencode` (spawns an isolated server + the OpenAI mock;
   keyless, offline).
+- **Session logs (PLAN §4.6)**: every session renders a derived plain-text
+  `session.log` next to its JSONL (`ssh host -- tail -f …` with no client);
+  `npm run tail -- <sessionId>` follows it locally and regenerates it if
+  missing. JSONL stays authoritative; logs rebuild on daemon startup.
 - **Web UI** (`apps/daemon/public/index.html`, served at `/`): rendered
   transcript, tool cards, approval cards, status/usage pills, session picker,
   composer with send/stop, **pair-with-code + device management**, and a

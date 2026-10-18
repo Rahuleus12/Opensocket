@@ -1,6 +1,6 @@
 import http from "node:http";
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -163,6 +163,16 @@ try {
   assert.equal(snap.usage.tokensOut, 5);
   assert.equal(snap.usage.annotations?.total_tokens, 15);
   console.log("ok  snapshot fold (messages, tools, usage)");
+
+  // 5.5 derived session.log (PLAN §4.6): plain-text, regenerable, greppable
+  const logPath = join(dataDir, "sessions", created.sessionId, "session.log");
+  const logText = await readFile(logPath, "utf8");
+  assert.ok(logText.includes("=== " + created.sessionId), "log header missing");
+  assert.ok(logText.includes("you:\n  hi"), `log user line missing:\n${logText}`);
+  assert.ok(logText.includes("agent:\n  Hello from Orchestra."), "log agent line missing");
+  assert.ok(logText.includes("tool "), "log tool line missing");
+  assert.ok(logText.includes("usage: 10 in / 5 out tok"), "log usage line missing");
+  console.log("ok  session.log derived transcript");
 } finally {
   server.close();
   orch.close();
@@ -170,6 +180,11 @@ try {
 
 // 6. durability: restart daemon on the same data dir
 {
+  // delete the derived log: it must regenerate from the JSONL on boot
+  const sessions = await readdir(join(dataDir, "sessions"));
+  for (const id of sessions) {
+    await rm(join(dataDir, "sessions", id, "session.log"), { force: true });
+  }
   const server2 = await startServer(cfg);
   const port2 = (server2.address() as AddressInfo).port;
   const api2 = (p: string) => `http://127.0.0.1:${port2}${p}`;
@@ -179,8 +194,19 @@ try {
     list.sessions.some((s) => s.lastSeq > 0 && s.sessionId.length > 0),
     "session not restored after restart",
   );
+  // the derived log was regenerated from events.jsonl
+  let regen = false;
+  for (const s of list.sessions) {
+    try {
+      const t = await readFile(join(dataDir, "sessions", s.sessionId, "session.log"), "utf8");
+      if (t.includes("agent:")) regen = true;
+    } catch {
+      // fold found no renderable events for this one
+    }
+  }
+  assert.ok(regen, "session.log not regenerated after restart");
   server2.close();
-  console.log("ok  durability across restart");
+  console.log("ok  durability across restart + log regeneration");
 }
 
 console.log("SMOKE_OK");

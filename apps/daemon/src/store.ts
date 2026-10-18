@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, readdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Envelope, Snapshot } from "@opensocket/protocol";
 
@@ -6,6 +6,12 @@ import type { Envelope, Snapshot } from "@opensocket/protocol";
  * JSONL is the source of truth (RFC 0001 §6 R2): one envelope per line,
  * ordered by seq. Sessions reload from disk on startup; fold() builds the
  * snapshot a client receives on (re)connect (RFC 0001 §7).
+ *
+ * Every session also renders a derived plain-text `session.log` next to the
+ * JSONL (PLAN §4.6): the zero-client escape hatch —
+ *   ssh host -- tail -f ~/.opensocket/sessions/<id>/session.log
+ * Logs are derived, never authoritative; regenerateLog() rebuilds one from
+ * the event log at any time.
  */
 export class SessionStore {
   private sessions = new Map<string, Envelope[]>();
@@ -39,6 +45,12 @@ export class SessionStore {
             // Skip a corrupt line; the rest of the log stays usable.
           }
         }
+        // Derived log missing (crash, or predates the feature): regenerate.
+        try {
+          await readFile(join(root, id, "session.log"), "utf8");
+        } catch {
+          await this.regenerateLog(id);
+        }
       } catch {
         // Directory without events.jsonl — ignore.
       }
@@ -62,6 +74,19 @@ export class SessionStore {
     const dir = join(this.dataDir, "sessions", env.sessionId);
     await mkdir(dir, { recursive: true });
     await appendFile(join(dir, "events.jsonl"), JSON.stringify(env) + "\n", "utf8");
+    const line = renderLogLine(env);
+    if (line) await appendFile(join(dir, "session.log"), line, "utf8");
+  }
+
+  /** Rebuild session.log from the event log (derived, never authoritative). */
+  async regenerateLog(sessionId: string): Promise<void> {
+    const dir = join(this.dataDir, "sessions", sessionId);
+    let out = "";
+    for (const env of this.events(sessionId)) {
+      const line = renderLogLine(env);
+      if (line) out += line;
+    }
+    if (out) await writeFile(join(dir, "session.log"), out, "utf8");
   }
 
   events(sessionId: string): Envelope[] {
@@ -160,5 +185,55 @@ export class SessionStore {
     }
     snap.messages = [...open.values()];
     return snap;
+  }
+}
+
+/**
+ * Render one envelope as plain text for session.log (PLAN §4.6). Returns
+ * "" for events that carry no human-readable weight (deltas join into the
+ * completed message; status churn is noise). Compact, greppable, tail-able.
+ */
+export function renderLogLine(env: Envelope): string {
+  const t = env.ts ? new Date(env.ts) : new Date();
+  const hhmmss = t.toISOString().slice(11, 19);
+  const p = (env.payload ?? {}) as Record<string, unknown>;
+  const block = (label: string, text: string): string => {
+    const body = String(text)
+      .split("\n")
+      .map((l) => "  " + l)
+      .join("\n");
+    return `[${hhmmss}] ${label}:\n${body}\n`;
+  };
+  switch (env.type) {
+    case "session.started": {
+      const model = p.model ? `/${String(p.model)}` : "";
+      return `=== ${env.sessionId} · ${String(p.harness ?? "?")}${model} · workspace ${String(p.workspace ?? "?")} · ${env.ts} ===\n`;
+    }
+    case "message.completed": {
+      if (!p.text) return "";
+      const role = p.role === "user" ? "you" : p.role === "system" ? "sys" : "agent";
+      return block(role, String(p.text));
+    }
+    case "tool.call":
+      return `[${hhmmss}] tool ${String(p.name)}: ${String(p.argsSummary ?? "")}\n`;
+    case "tool.result":
+      return `[${hhmmss}]   -> ${String(p.summary ?? "")}${p.isError ? "  [ERROR]" : ""}\n`;
+    case "permission.request":
+      return `[${hhmmss}] APPROVAL NEEDED ${String(p.tool)}: ${String(p.argsSummary ?? "")}\n`;
+    case "permission.resolved":
+      return `[${hhmmss}]   approval: ${String(p.decision)}\n`;
+    case "todo.updated": {
+      const items = Array.isArray(p) ? p : [];
+      const line = items.map((i) => `${(i as { state?: string }).state === "done" ? "[x]" : "[ ]"} ${(i as { text?: string }).text ?? ""}`).join(" · ");
+      return line ? `[${hhmmss}] plan: ${line}\n` : "";
+    }
+    case "diff":
+      return `[${hhmmss}] diff ${String(p.path)}\n`;
+    case "usage":
+      return `[${hhmmss}] usage: ${String(p.tokensIn ?? 0)} in / ${String(p.tokensOut ?? 0)} out tok\n`;
+    case "error":
+      return `[${hhmmss}] ERROR ${String(p.code ?? "?")}: ${String(p.message ?? "")}\n`;
+    default:
+      return ""; // deltas, status churn, metadata updates
   }
 }

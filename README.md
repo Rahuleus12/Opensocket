@@ -59,6 +59,19 @@ password, e.g. `OPENCODE_PASSWORD=secret opencode serve --port 4096`; pass the
 same secret to the daemon via `OPENCODE_PASSWORD` (it authenticates with HTTP
 Basic, username `opencode`).
 
+## Session logs (the zero-client escape hatch)
+
+Every session renders a plain-text, regenerable transcript next to its JSONL:
+
+```sh
+ssh host -- tail -f ~/.opensocket/sessions/<id>/session.log   # no client needed
+npm run tail -- <sessionId>                                    # same thing, locally
+```
+
+The JSONL event log stays the single source of truth; `session.log` is
+rebuildable from it at any time (and is regenerated automatically if missing
+on daemon startup).
+
 ## Test
 
 ```sh
