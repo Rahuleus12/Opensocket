@@ -12,8 +12,12 @@ npm run test:smoke     # full pipeline vs Orchestra contract double (no keys)
 npm run test:pi        # live pi RPC check (needs `pi` on PATH, no model calls)
 npm run test:builtin   # builtin agent vs the OpenAI mock (no keys)
 npm run dev:daemon     # run opensocketd (Node >= 24, native TS stripping)
-powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1    # full stack
+powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1    # full stack (Windows)
 powershell -ExecutionPolicy Bypass -File scripts/dev-down.ps1  # stop it
+scripts/dev-up.sh      # full stack (Linux/macOS; keyless demo if no ORCHESTRA_DIR)
+scripts/dev-down.sh    # stop it
+# On the Linux box: export TMPDIR=$HOME/tmp first (/tmp is a shared tmpfs
+# that fills up; writes then fail with EDQUOT, "Unknown system error -122").
 ```
 
 ## Layout

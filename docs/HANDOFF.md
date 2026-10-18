@@ -19,7 +19,8 @@ Everything below is **implemented and verified live** on the authoring PC:
   `DAEMON_TOKEN` remains as the dev-only quick start. Optional proxy-identity
   binding (`OPENSOCKET_IDENTITY_HEADERS` + `…_ENFORCE`) for `tailscale serve`
   fronting. Tested in `test:auth` and `test:ws`.
-- **harness-pi** (`@earendil-works/pi-coding-agent` v1.2.0, global install):
+- **harness-pi** (`@earendil-works/pi-coding-agent`, global install — v1.3.0
+  on the Linux box, v1.2.0 on the authoring Windows PC; protocol unchanged):
   `pi --mode rpc` child per session, LF-framed JSONL, deltas/tools/usage →
   OSSP, interrupt via `abort`, **resumable** (`--session-id`/`--session-dir`,
   id in `session.started.remoteSessionId`), **approvals** via loaded extension
@@ -72,11 +73,13 @@ Everything below is **implemented and verified live** on the authoring PC:
    Rotate the old key — it appeared in chat. Free models (id suffix `:free`)
    work even on a $0-limit key and DO support tool calls
    (e.g. `nvidia/nemotron-3-super-120b-a12b:free`).
-6. **Start**: `powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1`
-   (set `ORCHESTRA_DIR` env first if your Orchestra checkout is elsewhere).
+6. **Start**: Windows: `powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1`;
+   Linux/macOS: `scripts/dev-up.sh` (set `ORCHESTRA_DIR` first if your
+   Orchestra checkout is elsewhere; without it the script starts the keyless
+   demo stack only and says so). Stop: `scripts/dev-down.ps1` / `.sh`.
 7. **Use**: http://localhost:8097 (real — needs the key) and
    http://localhost:8098 (keyless demo: pi + builtin against local mocks).
-   Token for both: `devsecret`. Stop: `scripts/dev-down.ps1`.
+   Token for both: `devsecret`.
 
 ## Ports and processes (dev-up)
 
@@ -105,7 +108,15 @@ Logs: `%TEMP%\opensocket\`.
   DNS-restricted networks that hang. dev-up sets it for the demo daemon; the
   protocol test sets it too.
 - Git Bash `nohup ... &` does NOT survive shell exit on Windows — that is
-  what scripts/dev-up.ps1 (Start-Process) solves.
+  what scripts/dev-up.ps1 (Start-Process) solves. On real Linux `nohup … &
+  disown` is fine (scripts/dev-up.sh relies on it).
+- **Linux box (this machine, since 2026-10-18)**: shared box that also runs
+  Jenkins; `/tmp` is a small tmpfs others fill up (a stray Swift toolchain
+  hit it). Full tmpfs surfaces as `Unknown system error -122` (= EDQUOT)
+  inside the daemon and fails the tests with cryptic assertion errors —
+  export `TMPDIR=$HOME/tmp` before running tests/dev-up.sh here. Verified
+  green on this box: typecheck + all 8 test suites, Node 26.11, pi 1.3.0,
+  opencode 2.0.32, cargo 1.96 (ADR 0001 desktop target).
 
 ## Decisions already made (do not relitigate without an ADR)
 
@@ -180,7 +191,8 @@ Logs: `%TEMP%\opensocket\`.
 
 ```sh
 npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:opencode && npm run test:builtin && npm run test:auth && npm run test:ws
-powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1
+# Windows: powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1
+# Linux/macOS (this box: export TMPDIR=$HOME/tmp first): scripts/dev-up.sh
 curl -s http://localhost:8098/health
 # then in a browser: http://localhost:8098 (token devsecret)
 #   - new session, harness builtin, model mock-gpt -> prompt -> streams
