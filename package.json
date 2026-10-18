@@ -10,6 +10,7 @@
     "dev:daemon": "node apps/daemon/src/index.ts",
     "test:smoke": "node apps/daemon/test/smoke.ts",
     "test:pi": "node apps/daemon/test/pi-protocol.ts",
+    "test:opencode": "node apps/daemon/test/opencode.ts",
     "test:builtin": "node apps/daemon/test/builtin.ts",
     "test:notify": "node apps/daemon/test/notify.ts",
     "test:restore": "node apps/daemon/test/restore.ts",

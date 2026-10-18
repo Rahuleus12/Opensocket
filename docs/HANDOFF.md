@@ -1,7 +1,7 @@
 # Handoff — working on OpenSocket from a fresh PC
 
 This file + `AGENTS.md` + `PLAN.md` are all the context needed to continue.
-Last updated: 2026-10-14.
+Last updated: 2026-10-18.
 
 ## State at a glance
 
@@ -24,8 +24,14 @@ Everything below is **implemented and verified live** on the authoring PC:
 - **harness-orchestra**: drives Orchestra's server (`POST /v1/agents`,
   `/v1/agents/{id}/stream` SSE). Contract-verified; live runs need Orchestra
   to have a working provider (see patches below).
-- **harness-opencode**: WIP stub — needs an opencode install to verify its
-  server API (routes/event names are TODOs in `apps/daemon/src/opencode.ts`).
+- **harness-opencode**: verified against `opencode serve` v2.0.32 (see
+  `apps/daemon/src/opencode.ts` header for the live-checked contract):
+  v2 HTTP API under `/api/*`, HTTP Basic auth (user `opencode`, password from
+  the server's `OPENCODE_PASSWORD` env), one shared `/api/event` SSE bus
+  demuxed by session id, session-level ask-rules deliver R3 approvals
+  (`permission.asked` → OSSP `permission.request`, reply `once|always|reject`).
+  Tested in `test:opencode` (spawns an isolated server + the OpenAI mock;
+  keyless, offline).
 - **Web UI** (`apps/daemon/public/index.html`, served at `/`): rendered
   transcript, tool cards, approval cards, status/usage pills, session picker,
   composer with send/stop. Token = Bearer header, entered in the header.
@@ -105,10 +111,15 @@ Logs: `%TEMP%\opensocket\`.
    (`NTFY_URL`/`NTFY_TOKEN`), hooked on the daemon's emit path so every
    harness is covered: permission.request (high), error (high), and
    status-idle (cooldown 15s). Tested in `test:notify`.
-2. **opencode adapter verification (M1 close-out)**: `npm i -g opencode-ai`,
-   run `opencode serve`, fill the TODO table in
-   `apps/daemon/src/opencode.ts` (routes + event mapping), add a protocol
-   test like test:pi.
+2. ~~**opencode adapter verification (M1 close-out)**~~ — **done**: adapter
+   implemented + `test:opencode` protocol test (spawn isolated
+   `opencode serve` with a mock provider; create/stream/tool/approval
+   allow+deny/interrupt all verified). Gotchas learned: v2 tools were renamed
+   (`bash`→`shell`, `task`→`subagent`), permission actions use tool names,
+   session-level ask-rules append after agent defaults and win (findLast),
+   prompt message ids must be `msg_*` + globally unique in the server's
+   durable store, and the web UI/SDK route sets differ from the server's
+   (`/api/*` on the server).
 3. **M1 auth**: replace `DAEMON_TOKEN` with pairing (QR + per-device revocable
    tokens, optionally cross-checked against proxy identity headers) and add
    WebSocket transport alongside SSE (PLAN §4.4, RFC §3).
@@ -135,7 +146,7 @@ Logs: `%TEMP%\opensocket\`.
 ## Verification checklist for a new machine
 
 ```sh
-npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:builtin
+npm run typecheck && npm run test:smoke && npm run test:pi && npm run test:opencode && npm run test:builtin
 powershell -ExecutionPolicy Bypass -File scripts/dev-up.ps1
 curl -s http://localhost:8098/health
 # then in a browser: http://localhost:8098 (token devsecret)

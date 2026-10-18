@@ -9,8 +9,9 @@ tunnel, or a hosted box; connection recipes included, no VPN code. See
 **Status:** M0/M2. Harnesses are the session engines — **pi** (coding agent,
 RPC, approvals + resumable sessions), **Orchestra** (multi-agent workflows,
 contract-tested), **builtin** (direct-to-provider chat: OpenRouter, DeepSeek,
-Ollama, or the local mock), and **opencode** (adapter WIP); `opensocketd` is
-the auth + translation bridge with JSONL persistence. Runs on Node ≥ 24
+Ollama, or the local mock), and **opencode** (v2 server API, approvals via
+session ask-rules); `opensocketd` is the auth + translation bridge with JSONL
+persistence. Runs on Node ≥ 24
 (native TS stripping) — Bun-compatible, no runtime-specific APIs.
 
 ## Layout
@@ -18,7 +19,7 @@ the auth + translation bridge with JSONL persistence. Runs on Node ≥ 24
 - `docs/rfc/0001-ossp.md` — OSSP wire/persistence protocol (draft)
 - `packages/protocol/` — OSSP TypeScript types
 - `apps/daemon/` — `opensocketd` v0: SSE fan-out, JSONL store, harness adapters
-  (`src/orchestra.ts`, `src/pi.ts`, `src/opencode.ts` WIP), tests in `test/`
+  (`src/orchestra.ts`, `src/pi.ts`, `src/opencode.ts`), tests in `test/`
 - `PLAN.md` — architecture, roadmap, decisions
 
 ## Run (M0)
@@ -31,12 +32,18 @@ DAEMON_TOKEN=devsecret ORCHESTRA_URL=http://127.0.0.1:8080 npm run dev:daemon
 curl localhost:8097/health
 ```
 
+The opencode harness needs a running `opencode serve` started with a fixed
+password, e.g. `OPENCODE_PASSWORD=secret opencode serve --port 4096`; pass the
+same secret to the daemon via `OPENCODE_PASSWORD` (it authenticates with HTTP
+Basic, username `opencode`).
+
 ## Test
 
 ```sh
-npm run test:smoke    # full pipeline vs an Orchestra contract test double
-npm run test:pi       # live pi RPC protocol check (needs `pi` on PATH)
-npm run test:builtin  # built-in agent vs the OpenAI mock
+npm run test:smoke     # full pipeline vs an Orchestra contract test double
+npm run test:pi        # live pi RPC protocol check (needs `pi` on PATH)
+npm run test:opencode  # live opencode check (needs `opencode` on PATH; keyless)
+npm run test:builtin   # built-in agent vs the OpenAI mock
 npm run typecheck
 ```
 
@@ -73,6 +80,7 @@ and **task finished** (15s cooldown) for every harness.
 | `DAEMON_TOKEN`   | _(unset = open, dev)_    | Bearer token (M0 stopgap)      |
 | `ORCHESTRA_URL`  | `http://127.0.0.1:8080`  | `orchestra serve` base URL     |
 | `OPENCODE_URL`   | `http://127.0.0.1:4096`  | `opencode serve` base URL      |
+| `OPENCODE_PASSWORD` | _(unset = no auth)_   | That server's password         |
 | `NTFY_URL`       | _(unset = off)_          | ntfy topic URL for pushes      |
 | `NTFY_TOKEN`     | _(unset)_                | Bearer token (self-hosted ntfy)|
 | `OPENSOCKET_DATA`| `~/.opensocket`          | JSONL session storage root     |

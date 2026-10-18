@@ -4,8 +4,10 @@ export interface Config {
   daemonToken: string;
   /** Base URL of `orchestra serve` - the first validated harness. */
   orchestraUrl: string;
-  /** Base URL of `opencode serve` - adapter is WIP (TODO(M0)). */
+  /** Base URL of `opencode serve` - adapter verified against v2.0.32. */
   opencodeUrl: string;
+  /** Password for `opencode serve` (its OPENCODE_PASSWORD env). */
+  opencodePassword: string;
   /** pi binary (global npm install of @earendil-works/pi-coding-agent). */
   piBin: string;
   /** Built-in agent provider (OpenAI-compatible). Defaults to env key. */
@@ -32,6 +34,7 @@ export function loadConfig(
     daemonToken: env.DAEMON_TOKEN ?? "",
     orchestraUrl: env.ORCHESTRA_URL ?? "http://127.0.0.1:8080",
     opencodeUrl: env.OPENCODE_URL ?? "http://127.0.0.1:4096",
+    opencodePassword: env.OPENCODE_PASSWORD ?? "",
     piBin: env.PI_BIN ?? "pi",
     // Built-in agent: default to the env's OpenRouter key when present (R4:
     // provider choice stays in the harness), else the local mock.

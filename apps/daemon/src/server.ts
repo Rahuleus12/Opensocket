@@ -68,7 +68,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
 
   const harnesses = new Map<string, Harness>([
     ["orchestra", new OrchestraHarness(cfg.orchestraUrl)],
-    ["opencode", new OpencodeHarness(cfg.opencodeUrl)],
+    ["opencode", new OpencodeHarness(cfg.opencodeUrl, cfg.opencodePassword, cfg.dataDir)],
     ["pi", new PiHarness(cfg.piBin, cfg.dataDir, `http://127.0.0.1:${cfg.port}`, cfg.daemonToken)],
     ["builtin", new BuiltinHarness(cfg.builtinBaseUrl, cfg.builtinApiKey, cfg.builtinModel, cfg.dataDir, gate)],
   ]);

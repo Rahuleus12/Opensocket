@@ -53,6 +53,9 @@ http
         if (lastMsg?.role !== "tool") {
           if (userText.includes("!run")) {
             toolCall = { name: "bash", args: '{"command":"echo tool-ran-ok"}' };
+          } else if (userText.includes("!shell")) {
+            // opencode v2 renamed bash -> shell
+            toolCall = { name: "shell", args: '{"command":"echo tool-ran-ok"}' };
           } else if (userText.includes("!read")) {
             toolCall = { name: "read", args: '{"path":"notes.txt"}' };
           } else if (userText.includes("!fetch")) {

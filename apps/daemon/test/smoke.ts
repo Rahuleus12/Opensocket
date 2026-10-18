@@ -94,7 +94,8 @@ const dataDir = await mkdtemp(join(tmpdir(), "opensocket-smoke-"));
 const cfg: Config = {
   port: 0,
   daemonToken: "t",
-  opencodeUrl: "http://127.0.0.1:1", // nothing there; opencode adapter is WIP
+  opencodeUrl: "http://127.0.0.1:1", // nothing there; adapter tests run their own server
+  opencodePassword: "",
   orchestraUrl: `http://127.0.0.1:${orchPort}`,
   piBin: "pi",
   builtinBaseUrl: "http://127.0.0.1:1/v1",

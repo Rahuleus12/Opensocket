@@ -150,12 +150,15 @@ interface Harness {
 }
 ```
 
-- **`harness-opencode`** (first target): drive OpenCode's server mode
-  (`opencode serve`) and/or its SDK; map its event stream onto OSSP. It has the
-  strongest headless/server story today — strong enough that it is also the v0
-  bootstrap: `opencode serve` is the M0 session engine, with opensocketd as a
-  thin auth/pairing + translation bridge in front of it. No custom engine until
-  a second harness forces the abstraction.
+- **`harness-opencode`** (verified against v2.0.32): drive `opencode serve`
+  over its v2 HTTP API. `POST /api/session` creates sessions scoped to the
+  workspace directory (with ask-rules for side-effecting tools, so approvals
+  round-trip), `POST /api/session/{id}/prompt` steers runs, and one shared
+  `GET /api/event` SSE bus streams text deltas, tool calls, usage, and
+  `permission.asked`/`replied` — mapped 1:1 onto OSSP. Auth is HTTP Basic
+  (`opencode:<OPENCODE_PASSWORD>`). Resume is trivial: opencode owns session
+  state, so the daemon just re-attaches the event bus to the stored
+  `remoteSessionId`.
 - **`harness-orchestra`** (validated reference, ships in M0): drive Orchestra's
   server — `POST /v1/agents` for sessions, `POST /v1/agents/{id}/stream` for
   runs. Its AgentEvent stream (thinking / generate_chunk / tool_call_* / done)
