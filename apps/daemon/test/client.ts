@@ -52,6 +52,15 @@ const server = await startServer(cfg);
 const port = (server.address() as { port: number }).port;
 const baseUrl = `http://127.0.0.1:${port}`;
 
+// 0. CORS preflight works without auth (browser/webview clients)
+{
+  const res = await fetch(`${baseUrl}/api/session`, { method: "OPTIONS" });
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get("access-control-allow-origin"), "*");
+  assert.match(res.headers.get("access-control-allow-headers") ?? "", /authorization/);
+  console.log("ok  CORS preflight");
+}
+
 async function waitFor<T>(
   probe: () => T | undefined,
   what: string,

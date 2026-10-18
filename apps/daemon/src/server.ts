@@ -24,7 +24,10 @@ import { WsConn } from "./ws.ts";
  */
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "content-type": "application/json" });
+  res.writeHead(status, {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+  });
   res.end(JSON.stringify(body));
 }
 
@@ -380,6 +383,18 @@ export async function startServer(cfg: Config): Promise<http.Server> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
+    // CORS preflight for browser/webview clients (Tauri companion app, PWA):
+    // auth is a Bearer header, not cookies, so "*" relaxes nothing.
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type",
+        "access-control-max-age": "86400",
+      });
+      res.end();
+      return;
+    }
     try {
       // Web transcript UI (public; the page itself asks for the daemon token).
       if (req.method === "GET" && (path === "/" || path === "/ui")) {
@@ -593,6 +608,7 @@ export async function startServer(cfg: Config): Promise<http.Server> {
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
           connection: "keep-alive",
+          "access-control-allow-origin": "*",
         });
         const write = (env: Envelope) => {
           res.write(`id: ${env.seq}\ndata: ${JSON.stringify(env)}\n\n`);
