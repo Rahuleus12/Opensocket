@@ -187,7 +187,7 @@ Logs: `%TEMP%\opensocket\`.
    requests, snapshot+tail resume; hand-rolled RFC 6455 in `src/ws.ts` — no
    deps), brute-force throttle, optional proxy-identity enforcement, web UI
    pair/devices management + WS-first transport with SSE fallback. The QR of
-   the pair code is deferred to the Expo app (it can render one of the pair
+   the pair code is rendered by the companion app (it can display one of the pair
    URL); the daemon ships the code + REST surface now. Tested in `test:auth`
    and `test:ws`.
 4. ~~**builtin: provider-context rebuild**~~ — **done**: optional
@@ -207,7 +207,8 @@ Logs: `%TEMP%\opensocket\`.
 7. ~~**Connection recipes doc**~~ — **done**: `examples/connect.md` (LAN,
    Tailscale + WhoIS identity, SSH tunnel, VPS + TLS with Caddy/nginx
    snippets) + `examples/opensocketd.service` (systemd, hardened). Docs only,
-   no code (see the transport decision above). Companion app (Expo) can start
+   no code (see the transport decision above). Companion app (Tauri 2, ADR 0001)
+   can start
    — pairing exists.
 8. ~~**Orchestra upstream**~~ — **out of scope**: Orchestra is a separate
    project (own repo, own backlog); this repo only consumes it through the
@@ -226,9 +227,13 @@ Logs: `%TEMP%\opensocket\`.
     + live events + approval round-trip, reconnect dedupe, SSE fallback);
     (b) `apps/mobile` — Tauri 2 shell + Preact/vite frontend, developed on
     Linux against the keyless demo daemon (:8098), desktop target works on
-    this box (cargo 1.96 + webkit2gtk-4.1 present) — **scaffolded, see the
-    state-at-a-glance bullet above**; next: real-use polish (markdown/diff
-    rendering, session drawer metadata, long-list scroll check);
+    this box (cargo 1.96 + webkit2gtk-4.1 present) — **scaffolded**, and the
+    frontend has grown past scaffold (Windows session, 2026-10): sessions
+    drawer with tabs (Sessions/Devices), live harness picker from
+    `/api/harnesses`, new-session form (harness/model/workspace/name/system),
+    per-session usage + cost, rename/archive, archived section, Devices tab
+    (mint pairing code, revoke), header disconnect. Next: real-use polish
+    (markdown/diff rendering, long-list virtualization if needed);
     (c) CI — GitHub Actions `macos-15` job for `tauri ios build` → TestFlight
     (needs Apple Developer Program; no iOS toolchain on Linux for any stack).
 

@@ -17,7 +17,14 @@ type Item =
 
 const LS_BASE = "os_base";
 const LS_TOKEN = "os_token";
-const HARNESS_OPTIONS = ["builtin", "pi", "opencode", "orchestra"];
+const FALLBACK_HARNESS = ["builtin", "pi", "opencode", "orchestra"];
+
+interface DeviceRow {
+  deviceId: string;
+  name?: string;
+  pairedAt?: string;
+  lastSeen?: string;
+}
 
 function md(text: string): string {
   let h = text
@@ -70,6 +77,19 @@ export function App() {
   const [usage, setUsage] = useState({ in: 0, out: 0 });
   const [draft, setDraft] = useState("");
   const [drawer, setDrawer] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"sessions" | "devices">("sessions");
+  const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [pairCode, setPairCode] = useState("");
+  const [harnessOpts, setHarnessOpts] = useState<string[]>(FALLBACK_HARNESS);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [form, setForm] = useState({
+    harness: "builtin",
+    model: "",
+    workspace: "default",
+    name: "",
+    system: "",
+  });
 
   const clientRef = useRef<OpenSocketClient | null>(null);
   const currentRef = useRef<string | null>(null);
@@ -165,6 +185,15 @@ export function App() {
 
   async function refresh(c: OpenSocketClient): Promise<void> {
     setSessions(await c.sessions(true).catch(() => []));
+    const hs = await c.harnesses().catch(() => []);
+    if (hs.length > 0) {
+      const ids = hs.map((h) => (typeof h === "string" ? h : String((h as { id?: string }).id ?? h))).filter(Boolean);
+      if (ids.length) setHarnessOpts(ids);
+    }
+  }
+
+  async function refreshDevices(c: OpenSocketClient): Promise<void> {
+    setDevices((await c.devices().catch(() => [])) as DeviceRow[]);
   }
 
   async function adopt(c: OpenSocketClient): Promise<void> {
@@ -185,6 +214,7 @@ export function App() {
       return;
     }
     await adopt(c);
+    await refreshDevices(c);
   }
 
   async function pair(): Promise<void> {
@@ -218,20 +248,59 @@ export function App() {
   async function newSession(): Promise<void> {
     const c = clientRef.current;
     if (!c) return;
-    const harness = window.prompt(`harness? (${HARNESS_OPTIONS.join(", ")})`, "builtin");
-    if (!harness) return;
-    const model = window.prompt("model (empty = harness default)", "") ?? "";
     try {
       const { sessionId } = await c.createSession({
-        harness: harness.trim(),
-        model: model.trim() || undefined,
-        workspace: "default",
+        harness: form.harness,
+        model: form.model.trim() || undefined,
+        workspace: form.workspace.trim() || "default",
+        name: form.name.trim() || undefined,
+        system: form.system.trim() || undefined,
       });
+      setForm((f) => ({ ...f, model: "", name: "", system: "" }));
       await refresh(c);
       await openSession(sessionId);
     } catch (e) {
       setNotice(String((e as Error).message ?? e));
     }
+  }
+
+  async function rename(sid: string): Promise<void> {
+    const c = clientRef.current;
+    if (!c || !editName.trim()) return;
+    await c.renameSession(sid, editName.trim()).catch((e) => setNotice(String(e)));
+    setEditing(null);
+    await refresh(c);
+  }
+
+  async function archive(sid: string): Promise<void> {
+    const c = clientRef.current;
+    if (!c) return;
+    await c.archiveSession(sid).catch((e) => setNotice(String(e)));
+    if (currentRef.current === sid) {
+      currentRef.current = null;
+      setCurrent(null);
+      setItems([]);
+    }
+    await refresh(c);
+  }
+
+  async function mintCode(): Promise<void> {
+    const c = clientRef.current;
+    if (!c) return;
+    try {
+      const { code } = await c.mintPairingCode();
+      setPairCode(code);
+      await refreshDevices(c);
+    } catch (e) {
+      setNotice(String((e as Error).message ?? e));
+    }
+  }
+
+  async function revoke(deviceId: string): Promise<void> {
+    const c = clientRef.current;
+    if (!c) return;
+    await c.revokeDevice(deviceId).catch((e) => setNotice(String(e)));
+    await refreshDevices(c);
   }
 
   async function send(): Promise<void> {
@@ -313,30 +382,186 @@ export function App() {
         <span class="pill grow right">
           {usage.in}/{usage.out} tok
         </span>
+        <button
+          class="ghost"
+          title="disconnect (session stays on the daemon)"
+          onClick={() => {
+            clientRef.current?.close();
+            setClient(null);
+            setCurrent(null);
+            setItems([]);
+            setTransport("off");
+          }}
+        >
+          ⏏
+        </button>
       </header>
 
       {drawer ? (
         <div class="drawer">
-          <div class="row">
-            <button class="primary" onClick={newSession}>
-              + New session
+          <div class="tabs">
+            <button class={drawerTab === "sessions" ? "tab on" : "tab"} onClick={() => setDrawerTab("sessions")}>
+              Sessions
             </button>
-            <button onClick={() => refresh(client)}>Refresh</button>
+            <button class={drawerTab === "devices" ? "tab on" : "tab"} onClick={() => { setDrawerTab("devices"); if (client) refreshDevices(client); }}>
+              Devices
+            </button>
+            <span class="grow" />
+            <button class="tab" onClick={() => refresh(client)} title="reload">
+              ⟳
+            </button>
           </div>
-          {live.map((s) => (
-            <div
-              class={`sess ${s.sessionId === current ? "cur" : ""}`}
-              onClick={() => openSession(s.sessionId)}
-              key={s.sessionId}
-            >
-              <div class="nm">{s.name || s.sessionId.slice(0, 16) + "…"}</div>
-              <div class="meta">
-                {s.harness}
-                {s.model ? ` · ${s.model}` : ""}
+
+          {drawerTab === "sessions" ? (
+            <>
+              <div class="row">
+                <button class="primary" onClick={newSession}>
+                  + New session
+                </button>
               </div>
-            </div>
-          ))}
-          {live.length === 0 ? <div class="dim pad">no sessions yet</div> : null}
+              <div class="form">
+                <div class="row">
+                  <select value={form.harness} onInput={(e) => setForm({ ...form, harness: e.currentTarget.value })}>
+                    {harnessOpts.map((h) => (
+                      <option value={h} key={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    placeholder="model (optional)"
+                    value={form.model}
+                    onInput={(e) => setForm({ ...form, model: e.currentTarget.value })}
+                    spellcheck={false}
+                  />
+                </div>
+                <div class="row">
+                  <input
+                    placeholder="workspace"
+                    value={form.workspace}
+                    onInput={(e) => setForm({ ...form, workspace: e.currentTarget.value })}
+                    spellcheck={false}
+                  />
+                  <input
+                    placeholder="name (optional)"
+                    value={form.name}
+                    onInput={(e) => setForm({ ...form, name: e.currentTarget.value })}
+                    spellcheck={false}
+                  />
+                </div>
+                <input
+                  placeholder="system prompt (optional)"
+                  value={form.system}
+                  onInput={(e) => setForm({ ...form, system: e.currentTarget.value })}
+                  spellcheck={false}
+                />
+              </div>
+              {live.map((s) => (
+                <div
+                  class={`sess ${s.sessionId === current ? "cur" : ""}`}
+                  onClick={() => openSession(s.sessionId)}
+                  key={s.sessionId}
+                >
+                  {editing === s.sessionId ? (
+                    <span class="row" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        value={editName}
+                        onInput={(e) => setEditName(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void rename(s.sessionId);
+                        }}
+                        spellcheck={false}
+                      />
+                      <button class="primary" onClick={() => void rename(s.sessionId)}>
+                        save
+                      </button>
+                      <button onClick={() => setEditing(null)}>×</button>
+                    </span>
+                  ) : (
+                    <>
+                      <div class="nm">{s.name || s.sessionId.slice(0, 16) + "…"}</div>
+                      <div class="meta">
+                        <span>{s.harness}</span>
+                        {s.model ? <span>· {s.model}</span> : null}
+                        {s.workspace ? <span>· {s.workspace}</span> : null}
+                        {s.usage ? (
+                          <span>
+                            · {s.usage.tokensIn ?? 0}/{s.usage.tokensOut ?? 0} tok
+                            {s.usage.costEstimate ? ` · $${Number(s.usage.costEstimate).toFixed(4)}` : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div class="acts">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditing(s.sessionId);
+                            setEditName(s.name || "");
+                          }}
+                        >
+                          rename
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void archive(s.sessionId);
+                          }}
+                        >
+                          archive
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {live.length === 0 ? <div class="dim pad">no sessions yet</div> : null}
+              {sessions.some((s) => s.archived) ? (
+                <>
+                  <div class="archh">archived</div>
+                  {sessions
+                    .filter((s) => s.archived)
+                    .map((s) => (
+                      <div class="sess archived" key={s.sessionId}>
+                        <div class="nm">{s.name || s.sessionId.slice(0, 16) + "…"}</div>
+                        <div class="meta">{s.harness}</div>
+                      </div>
+                    ))}
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {drawerTab === "devices" ? (
+            <>
+              <div class="row">
+                <button class="primary" onClick={mintCode}>
+                  Mint pairing code
+                </button>
+              </div>
+              {pairCode ? (
+                <div class="paircode" onClick={() => navigator.clipboard?.writeText(pairCode)} title="tap to copy">
+                  {pairCode}
+                </div>
+              ) : null}
+              {devices.map((d) => (
+                <div class="sess" key={d.deviceId}>
+                  <div class="nm">{d.name || d.deviceId.slice(0, 12)}</div>
+                  <div class="meta">
+                    {d.lastSeen ? <span>last seen {d.lastSeen}</span> : null}
+                    <span class="grow" />
+                    <button class="danger" onClick={() => revoke(d.deviceId)}>
+                      revoke
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {devices.length === 0 ? <div class="dim pad">no paired devices</div> : null}
+              <div class="dim pad small">
+                Pairing code + revoke apply to the daemon — any device you revoke
+                loses access immediately.
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 

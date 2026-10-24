@@ -136,3 +136,23 @@ footer {
   padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 textarea { flex: 1; resize: none; }
+
+/* ---- drawer growth (sessions tabs, form, devices) ---- */
+.tabs { display: flex; gap: 6px; align-items: center; padding: 10px 10px 4px; }
+.tab { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: transparent; border: 1px solid var(--line); color: var(--dim); }
+.tab.on { color: var(--fg); border-color: var(--accent); background: rgba(125, 211, 252, 0.08); }
+.form { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 10px; border-bottom: 1px solid var(--line); }
+.form .row { display: flex; gap: 6px; }
+.form input, .form select { min-width: 0; font-size: 13px; }
+.sess .acts { display: none; gap: 6px; margin-top: 6px; }
+.sess:hover .acts, .sess.cur .acts { display: flex; }
+.sess .acts button, .sess .row button { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
+.sess .row { display: flex; gap: 6px; align-items: center; }
+.sess .row input { flex: 1; min-width: 0; font-size: 13px; }
+.sess.archived { opacity: 0.55; }
+.archh { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding: 10px 10px 2px; }
+.paircode { font-family: ui-monospace, Consolas, monospace; font-size: 15px; letter-spacing: 0.04em; background: rgba(125, 211, 252, 0.07); border: 1px dashed var(--accent); border-radius: 10px; padding: 10px 12px; margin: 8px 10px; cursor: pointer; user-select: all; }
+button.ghost { background: transparent; border: 1px solid var(--line); color: var(--dim); }
+button.ghost:hover { color: var(--fg); }
+button.danger { color: #fca5a5; border-color: #7f1d1d; }
+.dim.small { font-size: 11px; line-height: 1.5; }
